@@ -11,11 +11,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
+      - name: Setup Node.js for Backend
         uses: actions/setup-node@v3
         with:
           node-version: '20'
           cache: 'yarn'
+          cache-dependency-path: backend/yarn.lock
+
+      - name: Setup Node.js for Storefront
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: storefront/yarn.lock
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
