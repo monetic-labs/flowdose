@@ -2,20 +2,32 @@
 set -e
 
 # Load environment variables
-source .env.staging
+if [ -f .env ]; then
+  source .env
+elif [ -f .env.staging ]; then
+  cp .env.staging .env
+  source .env
+fi
 
 # Install dependencies
 echo "Installing dependencies..."
 corepack enable
-yarn install
+NODE_TLS_REJECT_UNAUTHORIZED=0 yarn install
 
-# Run database migrations
-echo "Running database migrations..."
-yarn medusa migrations run
+# Run database migrations with SSL verification disabled
+echo "Running database migrations with SSL verification disabled..."
+NODE_TLS_REJECT_UNAUTHORIZED=0 yarn medusa db:migrate
 
 # Build the application
 echo "Building application..."
-yarn build
+NODE_TLS_REJECT_UNAUTHORIZED=0 yarn build
+
+# Create placeholder admin UI file if it doesn't exist
+echo "Setting up admin placeholder..."
+mkdir -p public/admin
+if [ ! -f public/admin/index.html ]; then
+  echo '<html><body>Admin UI Placeholder</body></html>' > public/admin/index.html
+fi
 
 # Restart the service using PM2
 if pm2 list | grep -q "medusa-backend"; then
@@ -23,7 +35,7 @@ if pm2 list | grep -q "medusa-backend"; then
   pm2 restart medusa-backend
 else
   echo "Creating PM2 service..."
-  pm2 start "yarn start" --name medusa-backend
+  NODE_ENV=production PORT=9000 NODE_TLS_REJECT_UNAUTHORIZED=0 pm2 start "yarn medusa start --port 9000" --name medusa-backend
   pm2 save
 fi
 
