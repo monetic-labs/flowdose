@@ -5,9 +5,12 @@ import { loadEnv, defineConfig, Modules } from "@medusajs/framework/utils";
 
 loadEnv(process.env.NODE_ENV!, process.cwd());
 
+const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6380";
+
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    redisUrl: REDIS_URL,
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,
@@ -16,6 +19,51 @@ module.exports = defineConfig({
       cookieSecret: process.env.COOKIE_SECRET || "supersecret",
     },
   },
+  plugins: [
+    {
+      resolve: "medusa-plugin-meilisearch",
+      options: {
+        config: {
+          host: process.env.MEILISEARCH_HOST,
+          apiKey: process.env.MEILISEARCH_API_KEY,
+        },
+        settings: {
+          products: {
+            indexSettings: {
+              searchableAttributes: [
+                "title", 
+                "description",
+                "variant_sku",
+              ],
+              displayedAttributes: [
+                "id", 
+                "title", 
+                "description", 
+                "thumbnail", 
+                "handle",
+                "variant_sku",
+              ],
+              sortableAttributes: [
+                "created_at",
+                "updated_at",
+              ],
+            },
+            primaryKey: "id",
+            transformer: (product) => ({
+              id: product.id,
+              title: product.title,
+              description: product.description,
+              thumbnail: product.thumbnail,
+              handle: product.handle,
+              created_at: product.created_at,
+              updated_at: product.updated_at,
+              variant_sku: product.variants.map((v) => v.sku),
+            }),
+          },
+        },
+      },
+    },
+  ],
   modules: {
     [COMPANY_MODULE]: {
       resolve: "./modules/company",
@@ -27,7 +75,16 @@ module.exports = defineConfig({
       resolve: "./modules/approval",
     },
     [Modules.CACHE]: {
-      resolve: "@medusajs/medusa/cache-inmemory",
+      resolve: "@medusajs/medusa/cache-redis",
+      options: {
+        redisUrl: REDIS_URL,
+      },
+    },
+    [Modules.EVENT_BUS]: {
+      resolve: "@medusajs/event-bus-redis",
+      options: {
+        redisUrl: REDIS_URL,
+      },
     },
     [Modules.WORKFLOW_ENGINE]: {
       resolve: "@medusajs/medusa/workflow-engine-inmemory",

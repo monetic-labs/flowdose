@@ -1,0 +1,251 @@
+{
+  "id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+  "title": "16\" Ultra-Slim AI Laptop | 3K OLED | 1.1cm Thin | 6-Speaker Audio",
+  "subtitle": null,
+  "description": "This ultra-thin 16-inch laptop is a sophisticated, high-performance machine for the new era of artificial intelligence. It has been completely redesigned from the inside out. The cabinet features an exquisite new ceramic-aluminum composite material in a range of nature-inspired colors. This material provides durability while completing the ultra-slim design and resisting the test of time. This innovative computer utilizes the latest AI-enhanced processor with quiet ambient cooling. It's designed to enrich your lifestyle on the go with an astonishingly thin 1.1cm chassis that houses an advanced 16-inch 3K OLED display and immersive six-speaker audio.",
+  "handle": "16-ultra-slim-ai-laptop-3k-oled-11cm-thin-6-speaker-audio",
+  "is_giftcard": false,
+  "discountable": true,
+  "thumbnail": "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-front.png",
+  "collection_id": "pcol_01JS7NMD5M5N1MYXE9Y1CDDNFR",
+  "type_id": null,
+  "weight": "400",
+  "length": null,
+  "height": null,
+  "width": null,
+  "hs_code": null,
+  "origin_country": null,
+  "mid_code": null,
+  "material": null,
+  "created_at": "2025-04-19T18:40:33.993Z",
+  "updated_at": "2025-04-19T18:40:33.993Z",
+  "type": null,
+  "collection": {
+    "id": "pcol_01JS7NMD5M5N1MYXE9Y1CDDNFR",
+    "title": "Featured",
+    "handle": "featured",
+    "metadata": null,
+    "created_at": "2025-04-19T18:40:33.970Z",
+    "updated_at": "2025-04-19T18:40:33.970Z",
+    "deleted_at": null
+  },
+  "options": [
+    {
+      "id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+      "title": "Color",
+      "metadata": null,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:33.993Z",
+      "updated_at": "2025-04-19T18:40:33.993Z",
+      "deleted_at": null,
+      "values": [
+        {
+          "id": "optval_01JS7NMD6XRBBACNM1DKYDBHTQ",
+          "value": "Blue",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01JS7NMD6XC17VPBWXQEW97KJA",
+          "value": "Red",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        }
+      ]
+    },
+    {
+      "id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+      "title": "Storage",
+      "metadata": null,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:33.993Z",
+      "updated_at": "2025-04-19T18:40:33.993Z",
+      "deleted_at": null,
+      "values": [
+        {
+          "id": "optval_01JS7NMD6XWGVE2XT1EY3NY4B0",
+          "value": "256 GB",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01JS7NMD6XY5R92A46WQMPW4XJ",
+          "value": "512 GB",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        }
+      ]
+    }
+  ],
+  "tags": [],
+  "images": [
+    {
+      "id": "img_01JS7NMD788RCVTADXZYCD115Q",
+      "url": "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-front.png",
+      "metadata": null,
+      "rank": 0,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:33.993Z",
+      "updated_at": "2025-04-19T18:40:33.993Z",
+      "deleted_at": null
+    },
+    {
+      "id": "img_01JS7NMD78VMKVPP3728S1THXG",
+      "url": "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-side.png",
+      "metadata": null,
+      "rank": 1,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:33.993Z",
+      "updated_at": "2025-04-19T18:40:33.993Z",
+      "deleted_at": null
+    },
+    {
+      "id": "img_01JS7NMD78SEFKN25YHCV8PXCQ",
+      "url": "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-top.png",
+      "metadata": null,
+      "rank": 2,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:33.993Z",
+      "updated_at": "2025-04-19T18:40:33.993Z",
+      "deleted_at": null
+    }
+  ],
+  "variants": [
+    {
+      "id": "variant_01JS7NMD7XC3MNXT6C7BXB4DZS",
+      "title": "256 GB / Blue",
+      "sku": "256-BLUE",
+      "barcode": null,
+      "ean": null,
+      "upc": null,
+      "allow_backorder": false,
+      "manage_inventory": false,
+      "hs_code": null,
+      "origin_country": null,
+      "mid_code": null,
+      "material": null,
+      "weight": null,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 0,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:34.046Z",
+      "updated_at": "2025-04-19T18:40:34.046Z",
+      "deleted_at": null,
+      "options": [
+        {
+          "id": "optval_01JS7NMD6XWGVE2XT1EY3NY4B0",
+          "value": "256 GB",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+          "option": {
+            "id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+            "title": "Storage",
+            "metadata": null,
+            "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+            "created_at": "2025-04-19T18:40:33.993Z",
+            "updated_at": "2025-04-19T18:40:33.993Z",
+            "deleted_at": null
+          },
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01JS7NMD6XRBBACNM1DKYDBHTQ",
+          "value": "Blue",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+          "option": {
+            "id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+            "title": "Color",
+            "metadata": null,
+            "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+            "created_at": "2025-04-19T18:40:33.993Z",
+            "updated_at": "2025-04-19T18:40:33.993Z",
+            "deleted_at": null
+          },
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        }
+      ]
+    },
+    {
+      "id": "variant_01JS7NMD7XCSRE5ZK4PXRQHVD6",
+      "title": "512 GB / Red",
+      "sku": "512-RED",
+      "barcode": null,
+      "ean": null,
+      "upc": null,
+      "allow_backorder": false,
+      "manage_inventory": false,
+      "hs_code": null,
+      "origin_country": null,
+      "mid_code": null,
+      "material": null,
+      "weight": null,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 0,
+      "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+      "created_at": "2025-04-19T18:40:34.046Z",
+      "updated_at": "2025-04-19T18:40:34.046Z",
+      "deleted_at": null,
+      "options": [
+        {
+          "id": "optval_01JS7NMD6XY5R92A46WQMPW4XJ",
+          "value": "512 GB",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+          "option": {
+            "id": "opt_01JS7NMD6R980YDRE5XR1TVQHX",
+            "title": "Storage",
+            "metadata": null,
+            "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+            "created_at": "2025-04-19T18:40:33.993Z",
+            "updated_at": "2025-04-19T18:40:33.993Z",
+            "deleted_at": null
+          },
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01JS7NMD6XC17VPBWXQEW97KJA",
+          "value": "Red",
+          "metadata": null,
+          "option_id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+          "option": {
+            "id": "opt_01JS7NMD6RYS8M7X8X0V0M8W7F",
+            "title": "Color",
+            "metadata": null,
+            "product_id": "prod_01JS7NMD6GSS0TATNWYNR89Z54",
+            "created_at": "2025-04-19T18:40:33.993Z",
+            "updated_at": "2025-04-19T18:40:33.993Z",
+            "deleted_at": null
+          },
+          "created_at": "2025-04-19T18:40:33.993Z",
+          "updated_at": "2025-04-19T18:40:33.993Z",
+          "deleted_at": null
+        }
+      ]
+    }
+  ]
+}

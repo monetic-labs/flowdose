@@ -12,6 +12,7 @@ node_modules
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+yarn-error.log
 
 # Testing
 coverage
@@ -38,6 +39,13 @@ yarn-error.log*
 **/.env.development.local
 **/.env.test.local
 **/.env.production.local
+**/.env.staging
+**/.env.production
+
+# Database
+*.sql
+.cache
+.medusa
 
 # Turbo
 .turbo
