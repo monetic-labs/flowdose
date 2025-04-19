@@ -24,6 +24,7 @@ jobs:
 
       - name: Deploy Backend
         env:
+          # Backend host IP: 134.199.223.159
           BACKEND_HOST: ${{ secrets.STAGING_BACKEND_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
@@ -35,9 +36,13 @@ jobs:
           
           # Execute deployment script on server
           ssh $SSH_USER@$BACKEND_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          
+          # Renew SSL certificate if needed
+          ssh $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
 
       - name: Deploy Storefront
         env:
+          # Storefront host IP: 137.184.224.115
           STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
@@ -48,4 +53,7 @@ jobs:
           rsync -avz --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/$SSH_USER/app/
           
           # Execute deployment script on server
-          ssh $SSH_USER@$STOREFRONT_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh' 
+          ssh $SSH_USER@$STOREFRONT_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          
+          # Renew SSL certificate if needed
+          ssh $SSH_USER@$STOREFRONT_HOST 'certbot renew --non-interactive || true' 
