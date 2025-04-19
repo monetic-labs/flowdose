@@ -43,44 +43,48 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent"
           
-      - name: Deploy Backend
+      - name: Verify Backend Connection
         env:
-          # Backend host IP: 134.199.223.159
           BACKEND_HOST: ${{ secrets.STAGING_BACKEND_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
-          # Add host to known_hosts
+          echo "Verifying connection to backend: $SSH_USER@$BACKEND_HOST"
           ssh-keyscan -H $BACKEND_HOST >> ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "echo 'SSH connection successful'"
 
-          # Test SSH connection
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "echo 'SSH connection successful'" || echo "Failed to connect to backend"
-
-          # Copy deployment files to server
+      - name: Deploy Backend
+        env:
+          BACKEND_HOST: ${{ secrets.STAGING_BACKEND_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+        run: |
+          echo "Copying files to backend server..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./backend/ $SSH_USER@$BACKEND_HOST:/home/$SSH_USER/app/
           
-          # Execute deployment script on server
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          echo "Running deployment script..."
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/$SSH_USER/app && [ -f scripts/deploy.sh ] && bash scripts/deploy.sh"
           
-          # Renew SSL certificate if needed
+          echo "Checking SSL certificates..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
 
-      - name: Deploy Storefront
+      - name: Verify Storefront Connection
         env:
-          # Storefront host IP: 137.184.224.115
           STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
-          # Add host to known_hosts
+          echo "Verifying connection to storefront: $SSH_USER@$STOREFRONT_HOST"
           ssh-keyscan -H $STOREFRONT_HOST >> ~/.ssh/known_hosts
-          
-          # Test SSH connection
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'" || echo "Failed to connect to storefront"
-          
-          # Copy deployment files to server
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'"
+
+      - name: Deploy Storefront
+        env:
+          STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+        run: |
+          echo "Copying files to storefront server..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/$SSH_USER/app/
           
-          # Execute deployment script on server
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          echo "Running deployment script..."
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/$SSH_USER/app && [ -f scripts/deploy.sh ] && bash scripts/deploy.sh"
           
-          # Renew SSL certificate if needed
+          echo "Checking SSL certificates..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST 'certbot renew --non-interactive || true' 
