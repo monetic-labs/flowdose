@@ -21,11 +21,28 @@ jobs:
           corepack enable
           corepack prepare yarn@4.4.0 --activate
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+      - name: Debug SSH key format
+        run: |
+          # Display first line of key to check format (without exposing the actual key)
+          echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" | head -n 1 | echo "First line of key: $(cat)"
+          # Check if key contains proper openssh header
+          if echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" | grep -q "BEGIN OPENSSH PRIVATE KEY"; then
+            echo "Key has OpenSSH format header"
+          elif echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" | grep -q "BEGIN RSA PRIVATE KEY"; then
+            echo "Key has RSA format header"
+          else
+            echo "Key does not have standard header"
+          fi
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub 2>/dev/null || echo "Failed to extract public key"
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent"
+          
       - name: Deploy Backend
         env:
           # Backend host IP: 134.199.223.159
@@ -35,14 +52,17 @@ jobs:
           # Add host to known_hosts
           ssh-keyscan -H $BACKEND_HOST >> ~/.ssh/known_hosts
 
+          # Test SSH connection
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "echo 'SSH connection successful'" || echo "Failed to connect to backend"
+
           # Copy deployment files to server
-          rsync -avz --exclude node_modules --exclude .git ./backend/ $SSH_USER@$BACKEND_HOST:/home/$SSH_USER/app/
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./backend/ $SSH_USER@$BACKEND_HOST:/home/$SSH_USER/app/
           
           # Execute deployment script on server
-          ssh $SSH_USER@$BACKEND_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
           
           # Renew SSL certificate if needed
-          ssh $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
 
       - name: Deploy Storefront
         env:
@@ -53,11 +73,14 @@ jobs:
           # Add host to known_hosts
           ssh-keyscan -H $STOREFRONT_HOST >> ~/.ssh/known_hosts
           
+          # Test SSH connection
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'" || echo "Failed to connect to storefront"
+          
           # Copy deployment files to server
-          rsync -avz --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/$SSH_USER/app/
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/$SSH_USER/app/
           
           # Execute deployment script on server
-          ssh $SSH_USER@$STOREFRONT_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST 'cd /home/$SSH_USER/app && bash scripts/deploy.sh'
           
           # Renew SSL certificate if needed
-          ssh $SSH_USER@$STOREFRONT_HOST 'certbot renew --non-interactive || true' 
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST 'certbot renew --non-interactive || true' 
