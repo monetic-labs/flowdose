@@ -32,15 +32,14 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 yarn install || { echo "Failed to install depende
 echo "Running database migrations with SSL verification disabled..."
 NODE_TLS_REJECT_UNAUTHORIZED=0 yarn medusa db:migrate || { echo "Failed to run database migrations!"; exit 1; }
 
-# Build the application
-echo "Building application..."
+# Build the application with admin UI
+echo "Building application with admin UI..."
 NODE_TLS_REJECT_UNAUTHORIZED=0 yarn build || { echo "Failed to build application!"; exit 1; }
 
-# Create placeholder admin UI file if it doesn't exist
-echo "Setting up admin placeholder..."
-mkdir -p public/admin
-if [ ! -f public/admin/index.html ]; then
-  echo '<html><body>Admin UI Placeholder</body></html>' > public/admin/index.html
+# Verify the admin UI was built
+if [ ! -d "public/admin" ]; then
+  echo "Warning: Admin UI directory not found after build. Creating directory..."
+  mkdir -p public/admin
 fi
 
 # Restart the service using PM2

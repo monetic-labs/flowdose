@@ -69,17 +69,8 @@ jobs:
           echo "Copying files to backend server..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./backend/ $SSH_USER@$BACKEND_HOST:/home/root/app/
           
-          echo "Setting up environment for deployment..."
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/root/app && cp .env.staging .env"
-          
-          echo "Creating placeholder admin UI file..."
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/root/app && mkdir -p public/admin && echo '<html><body>Admin UI Placeholder</body></html>' > public/admin/index.html"
-          
-          echo "Running deployment..."
+          echo "Running deployment script..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/root/app && chmod +x scripts/deploy.sh && NODE_TLS_REJECT_UNAUTHORIZED=0 bash scripts/deploy.sh"
-          
-          echo "Setting up PM2 for persistence..."
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/root/app && pm2 delete medusa-backend || true && NODE_ENV=production PORT=9000 NODE_TLS_REJECT_UNAUTHORIZED=0 pm2 start 'yarn medusa start --port 9000' --name medusa-backend && pm2 save"
           
           echo "Checking SSL certificates..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
@@ -104,7 +95,6 @@ jobs:
           ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'"
 
       - name: Deploy Storefront
-        if: false  # Skip until connection issue is fixed
         env:
           STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
@@ -112,14 +102,8 @@ jobs:
           echo "Copying files to storefront server..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/root/app/
           
-          echo "Setting up environment for deployment..."
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/root/app && cp .env.staging .env"
-          
           echo "Running deployment script..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/root/app && chmod +x scripts/deploy.sh && NODE_TLS_REJECT_UNAUTHORIZED=0 bash scripts/deploy.sh"
-          
-          echo "Setting up PM2 for persistence..."
-          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/root/app && pm2 delete next-storefront || true && NODE_ENV=production NODE_TLS_REJECT_UNAUTHORIZED=0 pm2 start 'yarn start' --name next-storefront && pm2 save"
           
           echo "Checking SSL certificates..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST 'certbot renew --non-interactive || true' 
