@@ -52,29 +52,19 @@ echo "Ensuring PM2 starts on system boot..."
 pm2 startup | grep -v "sudo" || true
 pm2 save || true
 
-# Generate publishable API key if the script exists
+# Attempt to generate publishable API key, but don't fail deployment if it doesn't work
 if [ -f "scripts/generate-publishable-key.js" ]; then
-  echo "Waiting for service to fully initialize..."
-  # Wait for the service to start up properly - might take longer on some systems
-  sleep 30
-  
-  # Check if the service is responding
-  echo "Checking if Medusa API is responding..."
-  MAX_RETRIES=5
-  RETRY_COUNT=0
-  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -s http://localhost:9000/health | grep -q "OK"; then
-      echo "API is healthy, proceeding with key generation..."
-      break
-    else
-      echo "API not ready yet, waiting... (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
-      sleep 10
-      RETRY_COUNT=$((RETRY_COUNT+1))
-    fi
-  done
-  
-  echo "Generating publishable API key..."
-  NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/generate-publishable-key.js || echo "Warning: Could not generate publishable key"
+  echo "Attempting to generate publishable API key (optional)..."
+  {
+    # Try to generate key, but don't let it block deployment
+    echo "Waiting briefly for service to initialize..."
+    sleep 10
+    NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/generate-publishable-key.js
+    echo "Publishable key generation attempted - check logs for result"
+  } || {
+    echo "Note: Could not generate publishable key automatically."
+    echo "You can manually create one later via the admin dashboard."
+  }
 fi
 
 echo "Backend deployment completed successfully at $(date)!" 
