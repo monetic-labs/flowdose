@@ -90,10 +90,21 @@ jobs:
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
           echo "Verifying connection to storefront: $SSH_USER@$STOREFRONT_HOST"
+          echo "SSH_USER value: $SSH_USER"
+          echo "STOREFRONT_HOST value: $STOREFRONT_HOST"
+          
+          # Make sure the key is in the known hosts
           ssh-keyscan -H $STOREFRONT_HOST >> ~/.ssh/known_hosts
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'"
+          cat ~/.ssh/known_hosts
+          
+          # Check SSH key permissions again
+          ls -la ~/.ssh
+          
+          # Try to connect with verbose debugging
+          ssh -vvv -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "echo 'SSH connection successful'"
 
       - name: Deploy Storefront
+        if: false  # Skip until connection issue is fixed
         env:
           STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
