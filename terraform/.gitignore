@@ -1,0 +1,30 @@
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform directory
+.terraform/
+
+# Log files
+*.log
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+!example.tfvars
+!*.tfvars.example
+
+# Make sure secrets are ignored
+secrets.tfvars
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Generated files
+generated/
+
+# SSH keys
+*.pem
+id_*
+*.key 

@@ -1,0 +1,98 @@
+name: "Terraform Production Deployment"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'storefront/**'
+      - 'terraform/**'
+      - '.github/workflows/terraform-*.yml'
+
+jobs:
+  terraform:
+    name: "Deploy to Production with Terraform"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials for Spaces
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.SPACES_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SPACES_SECRET_KEY }}
+          aws-region: us-east-1 # Required but ignored for DO Spaces
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
+          chmod 600 ~/.ssh/flowdose-do
+          ssh-keyscan -H $(terraform output -raw backend_droplet_ip || echo "flowdose-backend.domain.com") >> ~/.ssh/known_hosts
+          ssh-keyscan -H $(terraform output -raw storefront_droplet_ip || echo "flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
+
+      # Require manual approval for production deployments
+      - name: Manual Approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.token }}
+          approvers: yourusername
+          minimum-approvals: 1
+          issue-title: "Approve Production Deployment"
+          issue-body: "Please approve or deny the production deployment"
+          exclude-workflow-initiator-as-approver: false
+          timeout-minutes: 30
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+        env:
+          TF_CLI_ARGS_init: "-backend-config='access_key=${{ secrets.SPACES_ACCESS_KEY }}' -backend-config='secret_key=${{ secrets.SPACES_SECRET_KEY }}'"
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: |
+          terraform plan \
+            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
+            -var="environment=production" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
+            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
+            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
+            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
+            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
+            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
+            -out=terraform.plan
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: |
+          terraform apply terraform.plan
+        
+      - name: Check deployment status
+        working-directory: ./terraform
+        run: |
+          echo "Backend IP: $(terraform output -raw backend_droplet_ip)"
+          echo "Storefront IP: $(terraform output -raw storefront_droplet_ip)"
+          echo "API URL: $(terraform output -raw api_url)"
+          echo "Admin URL: $(terraform output -raw admin_url)"
+          echo "Storefront URL: $(terraform output -raw storefront_url)"
+      
+      - name: Verify API health
+        run: |
+          API_URL=$(cd terraform && terraform output -raw api_url)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/health || echo "Failed")
+          echo "API health check returned: $STATUS"
+          if [[ "$STATUS" != "200" ]]; then
+            echo "Warning: API may not be fully available yet. This is expected after initial deployment."
+          fi 

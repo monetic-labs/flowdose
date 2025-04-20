@@ -62,3 +62,23 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 **/.DS_Store
+
+# Terraform specific rules
+# State files
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+
+# Directory
+terraform/**/.terraform/
+
+# Sensitive variable files
+terraform/**/*.tfvars
+terraform/**/*.tfvars.json
+!terraform/**/example.tfvars
+!terraform/**/*.tfvars.example
+
+# Make sure secrets are always ignored
+terraform/**/secrets.tfvars
+
+# Generated files
+terraform/**/generated/

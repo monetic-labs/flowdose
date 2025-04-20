@@ -1,0 +1,71 @@
+name: "Storefront Deployment"
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+    paths:
+      - 'storefront/**'
+      - '!storefront/README.md'
+      - '!storefront/docs/**'
+
+jobs:
+  deploy:
+    name: "Deploy Storefront"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials for Spaces
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.SPACES_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SPACES_SECRET_KEY }}
+          aws-region: us-east-1 # Required but ignored for DO Spaces
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
+          chmod 600 ~/.ssh/flowdose-do
+          ssh-keyscan -H $(cd terraform && terraform output -raw storefront_droplet_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
+
+      - name: Determine Environment
+        id: vars
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+        env:
+          TF_CLI_ARGS_init: "-backend-config='access_key=${{ secrets.SPACES_ACCESS_KEY }}' -backend-config='secret_key=${{ secrets.SPACES_SECRET_KEY }}'"
+
+      - name: Force Storefront Deployment
+        working-directory: ./terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
+            -var="environment=${{ steps.vars.outputs.environment }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
+            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
+            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
+            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
+            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
+            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
+            -var="force_deploy_storefront=true" 
