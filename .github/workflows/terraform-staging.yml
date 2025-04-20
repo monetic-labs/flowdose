@@ -36,8 +36,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
           chmod 600 ~/.ssh/flowdose-do
-          ssh-keyscan -H $(terraform output -raw backend_droplet_ip 2>/dev/null || echo "staging-flowdose-backend.domain.com") >> ~/.ssh/known_hosts
-          ssh-keyscan -H $(terraform output -raw storefront_droplet_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
+          ssh-keyscan -H $(terraform output -raw backend_ip 2>/dev/null || echo "staging-flowdose-backend.domain.com") >> ~/.ssh/known_hosts
+          ssh-keyscan -H $(terraform output -raw storefront_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
 
       - name: Terraform Init
         working-directory: ./terraform
@@ -61,11 +61,39 @@ jobs:
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="ssh_private_key_path=~/.ssh/flowdose-do"
         
-      - name: Check deployment status
+      - name: Get Server IPs
+        id: server_ips
         working-directory: ./terraform
         run: |
-          echo "Backend IP: $(terraform output -raw backend_droplet_ip)"
-          echo "Storefront IP: $(terraform output -raw storefront_droplet_ip)"
+          BACKEND_IP=$(terraform output -raw backend_ip)
+          STOREFRONT_IP=$(terraform output -raw storefront_ip)
+          echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
+          echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
+          
+      - name: Setup Environment Variables
+        working-directory: ./scripts
+        run: |
+          BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
+          STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
+          ./setup-env.sh staging $BACKEND_IP $STOREFRONT_IP
+      
+      - name: Deploy Backend
+        working-directory: ./scripts
+        run: |
+          BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
+          ./deploy-backend.sh staging $BACKEND_IP
+      
+      - name: Deploy Storefront
+        working-directory: ./scripts
+        run: |
+          STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
+          ./deploy-storefront.sh staging $STOREFRONT_IP
+      
+      - name: Display Deployment Info
+        working-directory: ./terraform
+        run: |
+          echo "Backend IP: $(terraform output -raw backend_ip)"
+          echo "Storefront IP: $(terraform output -raw storefront_ip)"
           echo "API URL: $(terraform output -raw api_url)"
           echo "Admin URL: $(terraform output -raw admin_url)"
           echo "Storefront URL: $(terraform output -raw storefront_url)"
@@ -73,9 +101,6 @@ jobs:
       - name: Verify SSL certificates
         working-directory: ./terraform
         run: |
-          BACKEND_IP=$(terraform output -raw backend_droplet_ip)
-          STOREFRONT_IP=$(terraform output -raw storefront_droplet_ip)
-          
           echo "Checking API SSL certificate..."
           API_URL=$(terraform output -raw api_url)
           SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL || echo "Failed")

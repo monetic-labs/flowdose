@@ -75,3 +75,94 @@ output "frontend_env_path" {
   description = "Path to the generated frontend environment file"
   value       = module.env_config_generation.frontend_env_path
 }
+
+# Server IPs
+output "backend_ip" {
+  description = "The public IP address of the backend server"
+  value       = module.backend_droplet.ipv4_address
+}
+
+output "storefront_ip" {
+  description = "The public IP address of the storefront server"
+  value       = module.storefront_droplet.ipv4_address
+}
+
+# Database and Redis
+output "database_url" {
+  description = "The PostgreSQL database connection URL"
+  value       = module.postgres_db.uri
+  sensitive   = true
+}
+
+output "redis_url" {
+  description = "The Redis cache connection URL"
+  value       = module.redis_db.uri
+  sensitive   = true
+}
+
+# Spaces configuration
+output "spaces_region" {
+  description = "The DigitalOcean Spaces region"
+  value       = var.spaces_region
+}
+
+# Secrets (sensitive outputs)
+output "spaces_access_key" {
+  description = "The DigitalOcean Spaces access key"
+  value       = var.spaces_access_key
+  sensitive   = true
+}
+
+output "spaces_secret_key" {
+  description = "The DigitalOcean Spaces secret key"
+  value       = var.spaces_secret_key
+  sensitive   = true
+}
+
+output "jwt_secret" {
+  description = "The JWT secret for authentication"
+  value       = var.jwt_secret
+  sensitive   = true
+}
+
+output "cookie_secret" {
+  description = "The cookie secret for sessions"
+  value       = var.cookie_secret
+  sensitive   = true
+}
+
+output "revalidate_secret" {
+  description = "The revalidation secret for Next.js"
+  value       = var.revalidate_secret
+  sensitive   = true
+}
+
+# Admin credentials
+output "admin_email" {
+  description = "Admin user email"
+  value       = var.admin_email
+}
+
+output "admin_password" {
+  description = "Admin user password"
+  value       = var.admin_password
+  sensitive   = true
+}
+
+# Email service
+output "resend_api_key" {
+  description = "Resend API key"
+  value       = var.resend_api_key
+  sensitive   = true
+}
+
+output "resend_from" {
+  description = "Email address to send from"
+  value       = var.resend_from
+}
+
+# Analytics
+output "google_analytics_id" {
+  description = "Google Analytics ID"
+  value       = var.google_analytics_id
+}

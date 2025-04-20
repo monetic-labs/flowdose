@@ -36,7 +36,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
           chmod 600 ~/.ssh/flowdose-do
-          ssh-keyscan -H $(cd terraform && terraform output -raw storefront_droplet_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
+          ssh-keyscan -H $(cd terraform && terraform output -raw storefront_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
 
       - name: Determine Environment
         id: vars
@@ -53,19 +53,22 @@ jobs:
         env:
           TF_CLI_ARGS_init: "-backend-config='access_key=${{ secrets.SPACES_ACCESS_KEY }}' -backend-config='secret_key=${{ secrets.SPACES_SECRET_KEY }}'"
 
-      - name: Force Storefront Deployment
+      - name: Get Storefront IP
+        id: storefront_ip
         working-directory: ./terraform
         run: |
-          terraform apply -auto-approve \
-            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
-            -var="environment=${{ steps.vars.outputs.environment }}" \
-            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
-            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
-            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
-            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
-            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
-            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
-            -var="force_deploy_storefront=true" 
+          STOREFRONT_IP=$(terraform output -raw storefront_ip)
+          echo "ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
+
+      - name: Setup Environment Variables
+        working-directory: ./scripts
+        run: |
+          BACKEND_IP=$(cd ../terraform && terraform output -raw backend_ip)
+          STOREFRONT_IP="${{ steps.storefront_ip.outputs.ip }}"
+          ./setup-env.sh ${{ steps.vars.outputs.environment }} $BACKEND_IP $STOREFRONT_IP
+
+      - name: Deploy Storefront
+        working-directory: ./scripts
+        run: |
+          STOREFRONT_IP="${{ steps.storefront_ip.outputs.ip }}"
+          ./deploy-storefront.sh ${{ steps.vars.outputs.environment }} $STOREFRONT_IP 
