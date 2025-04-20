@@ -74,6 +74,76 @@ jobs:
           
           echo "Checking SSL certificates..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST 'certbot renew --non-interactive || true'
+          
+          # Generate publishable API key
+          echo "Generating publishable API key..."
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cd /home/root/app && NODE_TLS_REJECT_UNAUTHORIZED=0 node -e \"
+            const axios = require('axios');
+            
+            async function loginAdmin() {
+              try {
+                console.log('Logging in as admin...');
+                const response = await axios.post('http://localhost:9000/admin/auth', {
+                  email: 'admin@flowdose.xyz',
+                  password: 'flowdose123'
+                });
+                return response.headers['set-cookie'][0].split(';')[0].split('=')[1];
+              } catch (error) {
+                console.error('Login error:', error.message);
+                return null;
+              }
+            }
+            
+            async function createPublishableKey(cookie) {
+              try {
+                console.log('Creating publishable API key...');
+                const response = await axios.post(
+                  'http://localhost:9000/admin/publishable-api-keys', 
+                  { title: 'Staging Key' },
+                  { headers: { Cookie: 'connect.sid=' + cookie } }
+                );
+                return response.data.publishable_api_key.id;
+              } catch (error) {
+                console.error('Error creating publishable key:', error.message);
+                return null;
+              }
+            }
+            
+            async function main() {
+              const cookie = await loginAdmin();
+              if (cookie) {
+                const keyId = await createPublishableKey(cookie);
+                if (keyId) {
+                  console.log('PUBLISHABLE_KEY=' + keyId);
+                  process.exit(0);
+                }
+              }
+              console.error('Failed to generate a valid publishable key');
+              process.exit(1);
+            }
+            
+            main().catch(err => {
+              console.error('Unhandled error:', err);
+              process.exit(1);
+            });
+          \" > /tmp/publishable_key.txt" || {
+            echo "ERROR: Failed to generate a valid publishable key. Deployment cannot continue."
+            exit 1
+          }
+          
+          # Extract the publishable key
+          echo "Extracting publishable key..."
+          MEDUSA_PUBLISHABLE_KEY=$(ssh -i ~/.ssh/id_ed25519 $SSH_USER@$BACKEND_HOST "cat /tmp/publishable_key.txt | grep PUBLISHABLE_KEY | cut -d'=' -f2")
+          
+          # Verify we have a key
+          if [ -z "$MEDUSA_PUBLISHABLE_KEY" ]; then
+            echo "ERROR: Failed to extract a valid publishable key. Deployment cannot continue."
+            exit 1
+          fi
+          
+          echo "Publishable key extracted: ${MEDUSA_PUBLISHABLE_KEY:0:5}*****"
+          # Save the key for later steps
+          echo "MEDUSA_PUBLISHABLE_KEY=${MEDUSA_PUBLISHABLE_KEY}" >> $GITHUB_ENV
 
       - name: Verify Storefront Connection
         env:
@@ -98,9 +168,20 @@ jobs:
         env:
           STOREFRONT_HOST: ${{ secrets.STAGING_STOREFRONT_HOST }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          MEDUSA_PUBLISHABLE_KEY: ${{ env.MEDUSA_PUBLISHABLE_KEY }}
         run: |
+          # Verify we have a publishable key before continuing
+          if [ -z "$MEDUSA_PUBLISHABLE_KEY" ]; then
+            echo "ERROR: No publishable key available. Cannot deploy storefront."
+            exit 1
+          fi
+          
           echo "Copying files to storefront server..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519" --exclude node_modules --exclude .git ./storefront/ $SSH_USER@$STOREFRONT_HOST:/home/root/app/
+          
+          # Create/update .env with the publishable key
+          echo "Setting up environment for deployment with publishable key..."
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/root/app && cp .env.staging .env && sed -i '/NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=/d' .env && echo 'NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${MEDUSA_PUBLISHABLE_KEY}' >> .env"
           
           echo "Running deployment script..."
           ssh -i ~/.ssh/id_ed25519 $SSH_USER@$STOREFRONT_HOST "cd /home/root/app && chmod +x scripts/deploy.sh && NODE_TLS_REJECT_UNAUTHORIZED=0 bash scripts/deploy.sh"
