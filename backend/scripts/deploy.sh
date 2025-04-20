@@ -60,9 +60,26 @@ pm2 save || true
 
 # Generate publishable API key if the script exists
 if [ -f "scripts/generate-publishable-key.js" ]; then
+  echo "Waiting for service to fully initialize..."
+  # Wait for the service to start up properly - might take longer on some systems
+  sleep 30
+  
+  # Check if the service is responding
+  echo "Checking if Medusa API is responding..."
+  MAX_RETRIES=5
+  RETRY_COUNT=0
+  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -s http://localhost:9000/health | grep -q "OK"; then
+      echo "API is healthy, proceeding with key generation..."
+      break
+    else
+      echo "API not ready yet, waiting... (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+      sleep 10
+      RETRY_COUNT=$((RETRY_COUNT+1))
+    fi
+  done
+  
   echo "Generating publishable API key..."
-  # Wait for the service to start up properly
-  sleep 10
   NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/generate-publishable-key.js || echo "Warning: Could not generate publishable key"
 fi
 
