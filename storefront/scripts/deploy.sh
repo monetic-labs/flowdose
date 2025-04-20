@@ -23,6 +23,32 @@ else
   exit 1
 fi
 
+# Check for publishable key and try to get one from the backend if missing
+if ! grep -q "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY" .env || grep -q "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_staging_temp" .env; then
+  echo "No valid publishable key found in .env, attempting to fetch from backend..."
+  
+  # Try to fetch publishable key from backend
+  # Assumes the backend is running on localhost:9000 in local dev or on api-staging.flowdose.xyz in staging
+  BACKEND_URL="http://localhost:9000"
+  if [ -n "$NODE_ENV" ] && [ "$NODE_ENV" = "production" ]; then
+    BACKEND_URL="https://api-staging.flowdose.xyz"
+  fi
+  
+  # Attempt to generate a key using generate-publishable-key script if available
+  if [ -f "../backend/scripts/generate-publishable-key.js" ]; then
+    echo "Using backend script to generate publishable key..."
+    NODE_TLS_REJECT_UNAUTHORIZED=0 MEDUSA_URL=$BACKEND_URL node ../backend/scripts/generate-publishable-key.js || true
+  fi
+  
+  # If still no key, use a placeholder
+  if ! grep -q "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY" .env || grep -q "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_staging_temp" .env; then
+    echo "Using placeholder publishable key for build..."
+    PLACEHOLDER_KEY="pk_placeholder_$(date +%s | md5sum | head -c 8)"
+    sed -i.bak "/NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=/d" .env
+    echo "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=$PLACEHOLDER_KEY" >> .env
+  fi
+fi
+
 # Install dependencies
 echo "Installing dependencies..."
 corepack enable || { echo "Failed to enable corepack. Continuing anyway..."; }
