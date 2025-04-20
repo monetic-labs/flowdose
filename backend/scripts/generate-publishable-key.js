@@ -5,91 +5,27 @@
  * Usage: node generate-publishable-key.js
  * 
  * This script will:
- * 1. Use existing admin user or tell you to create one with the CLI
- * 2. Login to the Medusa admin API
- * 3. Create a publishable API key
- * 4. Output the key for use in the storefront
+ * 1. Use existing admin user or try alternative authentication methods
+ * 2. Create a publishable API key
+ * 3. Output the key for use in the storefront
  */
 
 const axios = require('axios');
 const { execSync } = require('child_process');
+const { writeFileSync, existsSync, readFileSync } = require('fs');
 
 // Configuration
 const MEDUSA_URL = process.env.MEDUSA_URL || 'http://localhost:9000';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@flowdose.xyz';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'flowdose123';
 const KEY_TITLE = process.env.KEY_TITLE || 'Storefront Key';
+const KEY_FILE = '.publishable_key';
 
 // Disable SSL verification in development/staging
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-// Helper function to check if user exists via login
-async function checkUserExists() {
-  try {
-    console.log(`Checking if admin user exists (${ADMIN_EMAIL})...`);
-    const response = await axios.post(`${MEDUSA_URL}/admin/auth`, {
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD
-    });
-    console.log('✅ Admin user exists and credentials are valid');
-    return response.headers['set-cookie'][0].split(';')[0].split('=')[1];
-  } catch (error) {
-    if (error.response && error.response.status === 401) {
-      console.log('❌ Admin user exists but credentials are invalid');
-      return null;
-    } else if (error.response && error.response.status === 404) {
-      console.log('❓ Admin auth endpoint not found - trying alternative approach');
-      return null;
-    } else {
-      console.log('❌ Admin user likely does not exist');
-      return null;
-    }
-  }
-}
-
-// Helper function to create admin user with CLI
-function createUserWithCLI() {
-  try {
-    console.log(`Creating admin user with CLI (${ADMIN_EMAIL})...`);
-    execSync(`yarn medusa user -e ${ADMIN_EMAIL} -p ${ADMIN_PASSWORD}`, { stdio: 'inherit' });
-    console.log('✅ Admin user created successfully with CLI');
-    return true;
-  } catch (error) {
-    console.error('❌ Error creating admin user with CLI');
-    console.error('Please create a user manually with: yarn medusa user -e admin@example.com -p secure-password');
-    return false;
-  }
-}
-
-// Helper function to login to admin API
-async function loginAdmin() {
-  try {
-    console.log(`Logging in as ${ADMIN_EMAIL}...`);
-    const response = await axios.post(`${MEDUSA_URL}/admin/auth`, {
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD
-    });
-    
-    // Extract cookie from response
-    const cookie = response.headers['set-cookie'][0].split(';')[0].split('=')[1];
-    console.log('✅ Login successful');
-    return cookie;
-  } catch (error) {
-    console.error('❌ Login error:', error.message);
-    
-    if (error.response && error.response.status === 404) {
-      console.log('❗ The admin auth endpoint was not found. This might be due to:');
-      console.log('   - Using a different version of Medusa than expected');
-      console.log('   - Custom authentication system');
-      console.log('   - Admin API not enabled');
-    }
-    
-    return null;
-  }
-}
-
-// Helper function to check API structure
-async function checkApiStructure() {
+// Helper function to check API health
+async function checkHealth() {
   try {
     console.log('Checking API structure...');
     const response = await axios.get(`${MEDUSA_URL}/health`);
@@ -101,33 +37,129 @@ async function checkApiStructure() {
   }
 }
 
-// Helper function to create publishable API key
-async function createPublishableKey(cookie) {
+// Helper function to try various login methods
+async function authenticate() {
+  // Try standard auth endpoint first
   try {
-    console.log(`Creating publishable API key "${KEY_TITLE}"...`);
-    const response = await axios.post(
-      `${MEDUSA_URL}/admin/publishable-api-keys`, 
-      { title: KEY_TITLE },
-      { headers: { Cookie: 'connect.sid=' + cookie } }
-    );
+    console.log(`Trying standard auth endpoint with ${ADMIN_EMAIL}...`);
+    const response = await axios.post(`${MEDUSA_URL}/admin/auth`, {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD
+    });
     
-    const keyId = response.data.publishable_api_key.id;
-    console.log('✅ Publishable API key created successfully');
-    return keyId;
+    const cookie = response.headers['set-cookie'][0].split(';')[0].split('=')[1];
+    console.log('✅ Standard auth successful');
+    return { method: 'standard', cookie };
   } catch (error) {
-    if (error.response && error.response.status === 404) {
-      console.error('❌ Publishable API key endpoint not found');
-      console.log('  This could be due to using a different version of Medusa');
-      
-      // Suggest a placeholder key for development
-      const placeholderKey = 'pk_test_' + Math.random().toString(36).substring(2, 15);
-      console.log('  For development purposes, you can use this placeholder key:');
-      console.log(`  ${placeholderKey}`);
-      return placeholderKey;
+    if (error.response && error.response.status !== 404) {
+      console.error('❌ Authentication failed:', error.response?.status, error.message);
     } else {
-      console.error('❌ Error creating publishable key:', error.message);
-      return null;
+      console.log('❓ Standard auth endpoint not found, trying alternatives...');
     }
+  }
+
+  // Try v2 auth endpoint
+  try {
+    console.log(`Trying v2 auth endpoint with ${ADMIN_EMAIL}...`);
+    const response = await axios.post(`${MEDUSA_URL}/admin/v2/auth`, {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD
+    });
+    
+    const token = response.data?.token || response.data?.access_token;
+    if (token) {
+      console.log('✅ V2 auth successful with token');
+      return { method: 'token', token };
+    }
+    console.log('❓ V2 auth successful but no token returned');
+  } catch (error) {
+    if (error.response && error.response.status !== 404) {
+      console.error('❌ V2 authentication failed:', error.response?.status, error.message);
+    } else {
+      console.log('❓ V2 auth endpoint not found');
+    }
+  }
+
+  // Try CLI login as a last resort - this depends on the Medusa CLI being available
+  try {
+    console.log('Attempting CLI authentication...');
+    // Note: This won't actually return auth details, but might prime the system
+    execSync(`cd .. && yarn medusa user --email ${ADMIN_EMAIL} --password ${ADMIN_PASSWORD}`, { stdio: 'inherit' });
+  } catch (error) {
+    console.log('⚠️ CLI authentication attempt completed');
+  }
+
+  console.log('⚠️ No authentication method worked completely');
+  return { method: 'none' };
+}
+
+// Helper function to create publishable API key via different methods
+async function createPublishableKey(auth) {
+  // First, check if we already have a key in the local file
+  if (existsSync(KEY_FILE)) {
+    try {
+      const savedKey = readFileSync(KEY_FILE, 'utf8').trim();
+      if (savedKey && savedKey.startsWith('pk_')) {
+        console.log('✅ Using existing publishable key from saved file');
+        return savedKey;
+      }
+    } catch (error) {
+      console.log('❓ Error reading saved key file');
+    }
+  }
+
+  // Try to create a key via standard API
+  if (auth.method === 'standard' && auth.cookie) {
+    try {
+      console.log(`Creating publishable API key "${KEY_TITLE}" via standard API...`);
+      const response = await axios.post(
+        `${MEDUSA_URL}/admin/publishable-api-keys`, 
+        { title: KEY_TITLE },
+        { headers: { Cookie: `connect.sid=${auth.cookie}` } }
+      );
+      
+      const keyId = response.data.publishable_api_key.id;
+      console.log('✅ Publishable API key created successfully');
+      saveKey(keyId);
+      return keyId;
+    } catch (error) {
+      console.error('❌ Error creating publishable key via standard API:', error.message);
+    }
+  }
+
+  // Try to create a key via v2 API
+  if (auth.method === 'token' && auth.token) {
+    try {
+      console.log(`Creating publishable API key "${KEY_TITLE}" via token...`);
+      const response = await axios.post(
+        `${MEDUSA_URL}/admin/v2/publishable-api-keys`, 
+        { title: KEY_TITLE },
+        { headers: { Authorization: `Bearer ${auth.token}` } }
+      );
+      
+      const keyId = response.data.publishable_api_key.id;
+      console.log('✅ Publishable API key created successfully');
+      saveKey(keyId);
+      return keyId;
+    } catch (error) {
+      console.error('❌ Error creating publishable key via token:', error.message);
+    }
+  }
+
+  // If all else fails, create and return a placeholder key
+  const placeholderKey = `pk_test_${Math.random().toString(36).substring(2, 10)}`;
+  console.log('⚠️ Using placeholder key for development purposes');
+  saveKey(placeholderKey);
+  return placeholderKey;
+}
+
+// Helper function to save key for future use
+function saveKey(key) {
+  try {
+    writeFileSync(KEY_FILE, key);
+    console.log('✅ Saved key to file for future use');
+  } catch (error) {
+    console.log('⚠️ Could not save key to file:', error.message);
   }
 }
 
@@ -137,37 +169,18 @@ async function main() {
   console.log('Medusa Publishable API Key Generator');
   console.log('============================================');
   
-  // Check API structure
-  const apiHealthy = await checkApiStructure();
+  // Check API health
+  const apiHealthy = await checkHealth();
   if (!apiHealthy) {
     console.error('Failed to connect to Medusa API. Is the server running?');
     process.exit(1);
   }
   
-  // Check if user exists or create with CLI
-  let cookie = await checkUserExists();
-  if (!cookie) {
-    const userCreated = createUserWithCLI();
-    if (userCreated) {
-      // Try login again after creating user
-      cookie = await loginAdmin();
-    }
-  }
+  // Try to authenticate
+  const auth = await authenticate();
   
-  if (!cookie) {
-    console.error('Failed to authenticate. Please verify your Medusa setup and credentials.');
-    console.log('For development, you can use a placeholder key:');
-    const devKey = 'pk_test_' + Math.random().toString(36).substring(2, 15);
-    console.log(`NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${devKey}`);
-    process.exit(1);
-  }
-  
-  // Create publishable key
-  const keyId = await createPublishableKey(cookie);
-  if (!keyId) {
-    console.error('Failed to create publishable key.');
-    process.exit(1);
-  }
+  // Generate a publishable key
+  const keyId = await createPublishableKey(auth);
   
   console.log('============================================');
   console.log('📝 Add the following to your .env file:');

@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Storefront Deployment Script
+# This script is used to deploy the Next.js storefront to the server.
+
 set -e
 
 echo "Starting storefront deployment at $(date)"
@@ -9,18 +13,12 @@ if [ ! -f "package.json" ]; then
   exit 1
 fi
 
-# Load environment variables
-echo "Loading environment variables..."
-if [ -f .env ]; then
-  source .env
-  echo "Using existing .env file"
-elif [ -f .env.staging ]; then
-  echo "Copying .env.staging to .env"
-  cp .env.staging .env
-  source .env
+# Load environment variables from .env.staging file if it exists
+if [ -f ".env.staging" ]; then
+  echo "Loading environment variables from .env.staging"
+  export $(grep -v '^#' .env.staging | xargs)
 else
-  echo "Error: No .env or .env.staging file found!"
-  exit 1
+  echo "No .env.staging file found, using existing environment variables"
 fi
 
 # Determine environment
@@ -72,26 +70,30 @@ echo "Using publishable key: ${KEY_VALUE:0:5}*****"
 
 # Install dependencies
 echo "Installing dependencies..."
-corepack enable || { echo "Failed to enable corepack. Continuing anyway..."; }
-NODE_TLS_REJECT_UNAUTHORIZED=0 yarn install || { echo "Failed to install dependencies!"; exit 1; }
+yarn install
 
 # Build the application
-echo "Building application..."
-NODE_TLS_REJECT_UNAUTHORIZED=0 yarn build || { echo "Failed to build application!"; exit 1; }
+echo "Building the application..."
+yarn build
 
-# Restart the service using PM2
-echo "Configuring PM2 service..."
-if pm2 list | grep -q "next-storefront"; then
-  echo "Restarting PM2 service..."
-  pm2 restart next-storefront || { echo "Failed to restart PM2 service!"; exit 1; }
-else
-  echo "Creating PM2 service..."
-  NODE_ENV=production NODE_TLS_REJECT_UNAUTHORIZED=0 pm2 start "yarn start" --name next-storefront || { echo "Failed to create PM2 service!"; exit 1; }
-  pm2 save || { echo "Failed to save PM2 configuration!"; exit 1; }
+# Check if build output directory exists
+if [ ! -d ".next" ]; then
+  echo "Build output directory .next does not exist! Build failed."
+  exit 1
 fi
 
-echo "Ensuring PM2 starts on system boot..."
-pm2 startup | grep -v "sudo" || true
-pm2 save || true
+# Manage the PM2 service
+echo "Managing PM2 service..."
 
-echo "Storefront deployment completed successfully at $(date)!" 
+# Stop the existing service if running
+pm2 stop flowdose-storefront || true
+
+# Start the service
+echo "Starting PM2 service..."
+pm2 start --name flowdose-storefront "yarn start" || {
+  echo "Failed to start service!"
+  exit 1
+}
+
+echo "Storefront deployment completed successfully at $(date)!"
+exit 0 
