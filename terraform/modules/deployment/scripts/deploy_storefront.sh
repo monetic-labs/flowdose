@@ -64,7 +64,7 @@ if [ -d "$APP_DIR/storefront" ]; then
 fi
 
 # Create a temporary .env file with required variables
-echo "Creating .env file with required variables..."
+echo "Creating .env.local file with required variables..."
 cat > .env.local << EOF
 # Medusa backend
 NEXT_PUBLIC_MEDUSA_BACKEND_URL=$BACKEND_URL
@@ -75,17 +75,17 @@ EOF
 echo "Installing dependencies..."
 yarn install
 
-# Build the application
-echo "Building application..."
-yarn build
+# Skip the build step for initial deployment
+echo "Skipping build step for initial deployment to avoid backend dependency..."
 
 # Restart PM2 process if exists, or start a new one
 if pm2 show nextjs-storefront > /dev/null 2>&1; then
   echo "Restarting existing PM2 service..."
   pm2 restart nextjs-storefront
 else
-  echo "Creating new PM2 service..."
-  pm2 start --name nextjs-storefront "cd $APP_DIR/storefront && yarn start"
+  echo "Creating new PM2 service in development mode..."
+  # Use development mode which doesn't require pre-building
+  pm2 start --name nextjs-storefront "cd $APP_DIR/storefront && yarn dev"
 fi
 
 echo "Storefront deployment completed successfully" 
