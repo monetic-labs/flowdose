@@ -48,6 +48,21 @@ jobs:
       - name: Import Existing Resources
         working-directory: ./terraform
         run: |
+          # Set up Terraform variables
+          cat > terraform.tfvars <<EOF
+          do_token = "${{ secrets.DO_API_TOKEN }}"
+          environment = "staging"
+          jwt_secret = "${{ secrets.JWT_SECRET }}"
+          cookie_secret = "${{ secrets.COOKIE_SECRET }}"
+          revalidate_secret = "${{ secrets.REVALIDATE_SECRET }}"
+          admin_email = "${{ secrets.ADMIN_EMAIL }}"
+          admin_password = "${{ secrets.ADMIN_PASSWORD }}"
+          resend_api_key = "${{ secrets.RESEND_API_KEY }}"
+          spaces_access_key = "${{ secrets.SPACES_ACCESS_KEY }}"
+          spaces_secret_key = "${{ secrets.SPACES_SECRET_KEY }}"
+          ssh_private_key_path = "~/.ssh/flowdose-do"
+          EOF
+          
           # Import the existing resources
           terraform import module.backend_droplet.digitalocean_droplet.this 490588379 || echo "Failed to import backend droplet"
           terraform import module.storefront_droplet.digitalocean_droplet.this 490588593 || echo "Failed to import storefront droplet"
