@@ -28,59 +28,82 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Generate SSH Key
+        id: ssh_key
+        run: |
+          # Create SSH directory
+          mkdir -p ~/.ssh
+          
+          # Generate a new SSH key pair
+          ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+          
+          # Output the public key (will be used in Terraform)
+          echo "SSH_PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)" >> $GITHUB_ENV
+          
+          # Configure SSH to not check host keys
+          cat > ~/.ssh/config << 'EOF'
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
+          # Set permissions on private key
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Display SSH key files for debugging
+          ls -la ~/.ssh/
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
-      - name: Setup SSH key
+      - name: Create Terraform Variables File
+        working-directory: ./terraform
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
-          chmod 600 ~/.ssh/flowdose-do
-          ls -la ~/.ssh/flowdose-do
-          
-          # Test SSH key format
-          ssh-keygen -y -f ~/.ssh/flowdose-do || echo "Error: Invalid SSH key format"
-          
-          # Add host keys to known_hosts
-          ssh-keyscan -H 143.198.49.230 >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh-keyscan -H 64.23.136.21 >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat > terraform.tfvars << EOF
+          do_token="${{ secrets.DO_API_TOKEN }}"
+          environment="staging"
+          jwt_secret="${{ secrets.JWT_SECRET }}"
+          cookie_secret="${{ secrets.COOKIE_SECRET }}"
+          revalidate_secret="${{ secrets.REVALIDATE_SECRET }}"
+          admin_email="${{ secrets.ADMIN_EMAIL }}"
+          admin_password="${{ secrets.ADMIN_PASSWORD }}"
+          resend_api_key="${{ secrets.RESEND_API_KEY }}"
+          spaces_access_key="${{ secrets.SPACES_ACCESS_KEY }}"
+          spaces_secret_key="${{ secrets.SPACES_SECRET_KEY }}"
+          ssh_private_key_path="$HOME/.ssh/id_rsa"
+          ssh_public_key="${{ env.SSH_PUBLIC_KEY }}"
+          EOF
 
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
+      - name: Destroy Existing Infrastructure
+        working-directory: ./terraform
+        run: |
+          # First try to destroy only the droplets
+          terraform destroy -auto-approve -var-file="terraform.tfvars" \
+            -target=module.backend_droplet \
+            -target=module.storefront_droplet || true
+          
+          # If that fails, try a full destroy
+          terraform destroy -auto-approve -var-file="terraform.tfvars" || true
+      
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
-          # First refresh the state to see current resources
-          terraform plan -refresh-only \
-            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
-            -var="environment=staging" \
-            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
-            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
-            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
-            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
-            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
-            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do"
+          # Print the directory with the SSH key to confirm its location
+          echo "SSH key location: $HOME/.ssh/id_rsa"
+          ls -la $HOME/.ssh/
+          
+          # Plan the changes
+          terraform plan -var-file="terraform.tfvars"
           
           # Apply full Terraform configuration to create all resources
-          terraform apply -auto-approve \
-            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
-            -var="environment=staging" \
-            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
-            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
-            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
-            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
-            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
-            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do"
+          terraform apply -auto-approve -var-file="terraform.tfvars"
         
       - name: Get Server IPs
         id: server_ips
@@ -97,10 +120,11 @@ jobs:
           # Debug output
           echo "Backend IP: ${BACKEND_IP}"
           echo "Storefront IP: ${STOREFRONT_IP}"
-          
-          # Add new servers to known_hosts
-          ssh-keyscan -H ${BACKEND_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh-keyscan -H ${STOREFRONT_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
+      
+      - name: Wait for servers to initialize
+        run: |
+          echo "Waiting 90 seconds for servers to initialize..."
+          sleep 90
       
       - name: Setup Environment Variables
         working-directory: ./scripts

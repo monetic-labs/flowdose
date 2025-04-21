@@ -24,7 +24,7 @@ module "backend_droplet" {
   region = var.region
   image  = var.droplet_image
 
-  ssh_keys = var.ssh_key_ids
+  ssh_keys = local.ssh_keys
 
   tags = concat(["backend", "flowdose", var.environment], var.additional_tags)
 }
@@ -38,7 +38,7 @@ module "storefront_droplet" {
   region = var.region
   image  = var.droplet_image
 
-  ssh_keys = var.ssh_key_ids
+  ssh_keys = local.ssh_keys
 
   tags = concat(["storefront", "flowdose", var.environment], var.additional_tags)
 }

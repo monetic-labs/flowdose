@@ -47,6 +47,18 @@ variable "ssh_key_ids" {
   default     = []
 }
 
+variable "ssh_public_key" {
+  description = "SSH public key to add to droplets (generated in CI/CD)"
+  type        = string
+  default     = ""
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key used for provisioning"
+  type        = string
+  default     = "~/.ssh/id_rsa"
+}
+
 variable "additional_tags" {
   description = "Additional tags to apply to resources"
   type        = list(string)
@@ -159,11 +171,6 @@ variable "google_analytics_id" {
 }
 
 # Deployment
-variable "ssh_private_key_path" {
-  description = "Path to SSH private key for server access"
-  type        = string
-}
-
 variable "force_deploy_backend" {
   description = "Force backend deployment even if environment hasn't changed"
   type        = bool
