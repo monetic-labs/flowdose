@@ -8,11 +8,14 @@ NODE_ENV=${2:-production}
 # Log deployment start
 echo "Starting Backend deployment in $APP_DIR for environment $NODE_ENV"
 
+# Make apt-get non-interactive
+export DEBIAN_FRONTEND=noninteractive
+
 # Install Node.js, Yarn, and PM2 if not already installed
 if ! command -v node &> /dev/null; then
   echo "Installing Node.js..."
   curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-  apt-get install -y nodejs
+  apt-get install -y nodejs --no-install-recommends
 fi
 
 if ! command -v yarn &> /dev/null; then
