@@ -16,51 +16,17 @@ jobs:
     name: "Deploy to Staging with Terraform"
     runs-on: ubuntu-latest
     env:
-      # For S3 backend authentication
       AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
       AWS_REGION: us-east-1
-      # For DigitalOcean API authentication
       DIGITALOCEAN_TOKEN: ${{ secrets.DO_API_TOKEN }}
       DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DO_API_TOKEN }}
-      # For DigitalOcean Spaces authentication
       SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
       SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Verify DO API Token
-        run: |
-          # Test DO API token by listing available droplets
-          RESPONSE=$(curl -s -X GET \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
-            "https://api.digitalocean.com/v2/account")
-          
-          # Check if response contains account data
-          if echo "$RESPONSE" | grep -q "account"; then
-            echo "DO API token is valid"
-          else
-            echo "DO API token verification failed: $RESPONSE"
-            exit 1
-          fi
-
-      - name: Verify Spaces Credentials
-        run: |
-          # Test Spaces credentials by listing spaces
-          RESPONSE=$(AWS_ACCESS_KEY_ID=${{ secrets.SPACES_ACCESS_KEY }} \
-                     AWS_SECRET_ACCESS_KEY=${{ secrets.SPACES_SECRET_KEY }} \
-                     aws s3 ls --endpoint=https://nyc3.digitaloceanspaces.com 2>&1)
-          
-          if [[ $? -eq 0 ]]; then
-            echo "Spaces credentials are valid"
-          else
-            echo "Spaces credentials verification failed: $RESPONSE"
-            # Don't exit - Terraform might be able to create the bucket
-            echo "Will attempt to continue with deployment..."
-          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -72,43 +38,16 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
           chmod 600 ~/.ssh/flowdose-do
-          
-          # Add to SSH agent
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/flowdose-do
-          
-          # We can't add host keys yet because we don't know the IPs
-          # We'll do that before SSH connections are needed
+          ssh-keyscan -H $(terraform output -raw backend_ip 2>/dev/null || echo "staging-flowdose-backend.domain.com") >> ~/.ssh/known_hosts
+          ssh-keyscan -H $(terraform output -raw storefront_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
 
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
-      - name: Terraform Plan
-        working-directory: ./terraform
-        run: |
-          # Run plan first to see what changes would be made
-          terraform plan \
-            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
-            -var="environment=staging" \
-            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
-            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
-            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
-            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
-            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
-            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
-            -input=false
-
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
-          # Try apply with -refresh-only first to update state without making changes
-          terraform apply -refresh-only -auto-approve
-          
-          # Then do the actual apply
           terraform apply -auto-approve \
             -var="do_token=${{ secrets.DO_API_TOKEN }}" \
             -var="environment=staging" \
@@ -126,67 +65,16 @@ jobs:
         id: server_ips
         working-directory: ./terraform
         run: |
-          # Try to get IPs, but don't fail if terraform output fails
-          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "")
-          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "")
-          
-          # If terraform output failed, try to get IPs from DO API directly
-          if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
-            echo "Terraform output failed, trying to get IPs from DO API directly..."
-            BACKEND_IP=$(curl -s -X GET \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
-              "https://api.digitalocean.com/v2/droplets?name=staging-flowdose-backend" | \
-              jq -r '.droplets[0].networks.v4[] | select(.type=="public") | .ip_address')
-              
-            STOREFRONT_IP=$(curl -s -X GET \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
-              "https://api.digitalocean.com/v2/droplets?name=staging-flowdose-storefront" | \
-              jq -r '.droplets[0].networks.v4[] | select(.type=="public") | .ip_address')
-          fi
-          
+          BACKEND_IP=$(terraform output -raw backend_ip)
+          STOREFRONT_IP=$(terraform output -raw storefront_ip)
           echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
           echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
-          echo "Backend IP: $BACKEND_IP"
-          echo "Storefront IP: $STOREFRONT_IP"
-          
-          # Add host keys now that we know the IPs
-          if [ ! -z "$BACKEND_IP" ]; then
-            ssh-keyscan -H $BACKEND_IP >> ~/.ssh/known_hosts
-          fi
-          if [ ! -z "$STOREFRONT_IP" ]; then
-            ssh-keyscan -H $STOREFRONT_IP >> ~/.ssh/known_hosts
-          fi
-          
-      - name: Test SSH Connection
-        run: |
-          # Test SSH connection to both servers before proceeding
-          BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
-          STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
-          
-          if [ ! -z "$BACKEND_IP" ]; then
-            echo "Testing SSH connection to backend ($BACKEND_IP)..."
-            ssh -o StrictHostKeyChecking=no -i ~/.ssh/flowdose-do root@$BACKEND_IP "echo 'SSH connection to backend successful'"
-          fi
-          
-          if [ ! -z "$STOREFRONT_IP" ]; then
-            echo "Testing SSH connection to storefront ($STOREFRONT_IP)..."
-            ssh -o StrictHostKeyChecking=no -i ~/.ssh/flowdose-do root@$STOREFRONT_IP "echo 'SSH connection to storefront successful'"
-          fi
           
       - name: Setup Environment Variables
         working-directory: ./scripts
         run: |
           BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
           STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
-          
-          if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
-            echo "Error: Could not determine server IPs. Aborting."
-            exit 1
-          fi
-          
-          echo "Setting up environment with Backend IP: $BACKEND_IP, Storefront IP: $STOREFRONT_IP"
           ./setup-env.sh staging $BACKEND_IP $STOREFRONT_IP
       
       - name: Deploy Backend
@@ -204,15 +92,33 @@ jobs:
       - name: Display Deployment Info
         working-directory: ./terraform
         run: |
-          echo "Backend IP: $(terraform output -raw backend_ip 2>/dev/null || echo 'Not available')"
-          echo "Storefront IP: $(terraform output -raw storefront_ip 2>/dev/null || echo 'Not available')"
-          echo "API URL: $(terraform output -raw api_url 2>/dev/null || echo 'Not available')"
-          echo "Admin URL: $(terraform output -raw admin_url 2>/dev/null || echo 'Not available')"
-          echo "Storefront URL: $(terraform output -raw storefront_url 2>/dev/null || echo 'Not available')"
+          echo "Backend IP: $(terraform output -raw backend_ip)"
+          echo "Storefront IP: $(terraform output -raw storefront_ip)"
+          echo "API URL: $(terraform output -raw api_url)"
+          echo "Admin URL: $(terraform output -raw admin_url)"
+          echo "Storefront URL: $(terraform output -raw storefront_url)"
+      
+      - name: Verify SSL certificates
+        working-directory: ./terraform
+        run: |
+          echo "Checking API SSL certificate..."
+          API_URL=$(terraform output -raw api_url)
+          SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL || echo "Failed")
+          echo "API SSL check returned: $SSL_STATUS"
+          
+          echo "Checking Admin SSL certificate..."
+          ADMIN_URL=$(terraform output -raw admin_url)
+          SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $ADMIN_URL || echo "Failed")
+          echo "Admin SSL check returned: $SSL_STATUS"
+          
+          echo "Checking Storefront SSL certificate..."
+          STOREFRONT_URL=$(terraform output -raw storefront_url)
+          SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $STOREFRONT_URL || echo "Failed")
+          echo "Storefront SSL check returned: $SSL_STATUS"
       
       - name: Verify API health
         run: |
-          API_URL=$(cd terraform && terraform output -raw api_url 2>/dev/null || echo "https://api-staging.flowdose.xyz")
+          API_URL=$(cd terraform && terraform output -raw api_url)
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/health || echo "Failed")
           echo "API health check returned: $STATUS"
           if [[ "$STATUS" != "200" ]]; then
