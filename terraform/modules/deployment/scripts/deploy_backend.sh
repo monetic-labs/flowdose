@@ -18,10 +18,10 @@ if ! command -v node &> /dev/null; then
   apt-get install -y nodejs --no-install-recommends
 fi
 
-if ! command -v yarn &> /dev/null; then
-  echo "Installing Yarn..."
-  npm install -g yarn
-fi
+# Enable and prepare Corepack for Yarn version management
+echo "Setting up Corepack for Yarn version management..."
+corepack enable
+corepack prepare yarn@4.4.0 --activate
 
 if ! command -v pm2 &> /dev/null; then
   echo "Installing PM2..."
