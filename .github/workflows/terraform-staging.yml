@@ -44,8 +44,8 @@ jobs:
           ssh-keygen -y -f ~/.ssh/flowdose-do || echo "Error: Invalid SSH key format"
           
           # Add host keys to known_hosts
-          ssh-keyscan -H 143.198.49.230 >> ~/.ssh/known_hosts
-          ssh-keyscan -H 64.23.136.21 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 143.198.49.230 >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H 64.23.136.21 >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Terraform Init
         working-directory: ./terraform
@@ -68,7 +68,7 @@ jobs:
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="ssh_private_key_path=~/.ssh/flowdose-do"
           
-          # Apply only env_config_generation module to avoid SSH issues
+          # Apply full Terraform configuration to create all resources
           terraform apply -auto-approve \
             -var="do_token=${{ secrets.DO_API_TOKEN }}" \
             -var="environment=staging" \
@@ -80,27 +80,15 @@ jobs:
             -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
             -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
-            -target=module.env_config_generation
+            -var="ssh_private_key_path=~/.ssh/flowdose-do"
         
       - name: Get Server IPs
         id: server_ips
         working-directory: ./terraform
         run: |
-          # Get IPs from the state file with extra error handling
-          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "143.198.49.230")
-          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "64.23.136.21")
-          
-          # Validate IP addresses before using them
-          if [[ ! $BACKEND_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Using fallback IP for backend"
-            BACKEND_IP="143.198.49.230"
-          fi
-          
-          if [[ ! $STOREFRONT_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Using fallback IP for storefront"
-            STOREFRONT_IP="64.23.136.21"
-          fi
+          # Get IPs from the terraform outputs
+          BACKEND_IP=$(terraform output -raw backend_ip)
+          STOREFRONT_IP=$(terraform output -raw storefront_ip)
           
           # Set GitHub outputs
           echo "backend_ip=${BACKEND_IP}" >> $GITHUB_OUTPUT
@@ -109,6 +97,10 @@ jobs:
           # Debug output
           echo "Backend IP: ${BACKEND_IP}"
           echo "Storefront IP: ${STOREFRONT_IP}"
+          
+          # Add new servers to known_hosts
+          ssh-keyscan -H ${BACKEND_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${STOREFRONT_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
       
       - name: Setup Environment Variables
         working-directory: ./scripts
