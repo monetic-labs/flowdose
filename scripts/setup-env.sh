@@ -25,6 +25,19 @@ if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
     exit 1
 fi
 
+# Detect if running in CI
+if [ -n "$GITHUB_ACTIONS" ]; then
+    CI_MODE=true
+    echo "Running in CI environment, will skip SSH operations"
+else
+    CI_MODE=false
+fi
+
+# Create output directory for CI mode
+if [ "$CI_MODE" = true ]; then
+    mkdir -p ../generated
+fi
+
 # Get environment variables from Terraform or use defaults
 cd ../terraform
 echo "Loading environment variables from Terraform..."
@@ -88,21 +101,36 @@ RESEND_API_KEY=$RESEND_API_KEY
 RESEND_FROM=$RESEND_FROM
 EOF
 
-# Copy backend .env to server
-scp -o StrictHostKeyChecking=no backend.env $SSH_USER@$BACKEND_IP:/var/www/flowdose/backend/.env
-rm backend.env
-
-# Create publishable key for medusa
-echo "Generating publishable API key..."
-ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP << 'EOF'
-    cd /var/www/flowdose/backend
-    MEDUSA_PUBLISHABLE_KEY=$(node scripts/generate-publishable-key.js 2>/dev/null || echo "pk_staging_placeholder")
-    echo "Publishable key created: $MEDUSA_PUBLISHABLE_KEY"
-    echo "MEDUSA_PUBLISHABLE_KEY=$MEDUSA_PUBLISHABLE_KEY" >> .env
+# In CI mode, save files locally; otherwise upload to server
+if [ "$CI_MODE" = true ]; then
+    echo "Saving backend environment file to generated/backend.env"
+    cp backend.env ../generated/backend.env
+    
+    # Create a placeholder publishable key
+    PUBLISHABLE_KEY="pk_staging_placeholder_for_ci"
+    
+    # Show what would be uploaded
+    echo "Would upload environment to $SSH_USER@$BACKEND_IP:/var/www/flowdose/backend/.env"
+else
+    # Copy backend .env to server
+    echo "Uploading backend environment file to server..."
+    scp -o StrictHostKeyChecking=no backend.env $SSH_USER@$BACKEND_IP:/var/www/flowdose/backend/.env
+    
+    # Create publishable key for medusa
+    echo "Generating publishable API key..."
+    ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP << 'EOF'
+        cd /var/www/flowdose/backend
+        MEDUSA_PUBLISHABLE_KEY=$(node scripts/generate-publishable-key.js 2>/dev/null || echo "pk_staging_placeholder")
+        echo "Publishable key created: $MEDUSA_PUBLISHABLE_KEY"
+        echo "MEDUSA_PUBLISHABLE_KEY=$MEDUSA_PUBLISHABLE_KEY" >> .env
 EOF
+    
+    # Get the generated publishable key
+    PUBLISHABLE_KEY=$(ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP "grep MEDUSA_PUBLISHABLE_KEY /var/www/flowdose/backend/.env | cut -d= -f2")
+fi
 
-# Get the generated publishable key
-PUBLISHABLE_KEY=$(ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP "grep MEDUSA_PUBLISHABLE_KEY /var/www/flowdose/backend/.env | cut -d= -f2")
+# Clean up local copy
+rm backend.env
 
 # Create storefront .env file and upload to server
 echo "Setting up storefront environment..."
@@ -125,8 +153,20 @@ NEXT_PUBLIC_DEFAULT_REGION=US
 NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=$GOOGLE_ANALYTICS_ID
 EOF
 
-# Copy storefront .env to server
-scp -o StrictHostKeyChecking=no storefront.env $SSH_USER@$STOREFRONT_IP:/var/www/flowdose/storefront/.env
+# In CI mode, save files locally; otherwise upload to server
+if [ "$CI_MODE" = true ]; then
+    echo "Saving storefront environment file to generated/storefront.env"
+    cp storefront.env ../generated/storefront.env
+    
+    # Show what would be uploaded
+    echo "Would upload environment to $SSH_USER@$STOREFRONT_IP:/var/www/flowdose/storefront/.env"
+else
+    # Copy storefront .env to server
+    echo "Uploading storefront environment file to server..."
+    scp -o StrictHostKeyChecking=no storefront.env $SSH_USER@$STOREFRONT_IP:/var/www/flowdose/storefront/.env
+fi
+
+# Clean up local copy
 rm storefront.env
 
 echo "Environment setup completed successfully!" 
