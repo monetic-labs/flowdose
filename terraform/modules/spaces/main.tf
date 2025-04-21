@@ -1,8 +1,11 @@
-# Use a placeholder for module outputs
+# Use local values for existing bucket
 locals {
-  name = var.name
-  endpoint = "https://${var.name}.${var.region}.digitaloceanspaces.com"
+  bucket_name = var.name
+  bucket_region = var.region
   bucket_domain_name = "${var.name}.${var.region}.digitaloceanspaces.com"
+  endpoint = "https://${var.region}.digitaloceanspaces.com/${var.name}"
+  urn = "do:space:${var.name}"
+  name = var.name
 }
 
 # CORS configuration as a separate resource (recommended approach)
@@ -31,16 +34,7 @@ resource "digitalocean_cdn" "cdn" {
   custom_domain = var.cdn_custom_domain
 }
 
-# Use local values instead of resources for existing bucket
-locals {
-  bucket_name = var.name
-  bucket_region = var.region
-  bucket_domain_name = "${var.name}.${var.region}.digitaloceanspaces.com"
-  endpoint = "https://${var.region}.digitaloceanspaces.com/${var.name}"
-  urn = "do:space:${var.name}"
-}
-
-/* CORS configuration also commented out
+/* CORS configuration commented out
 resource "digitalocean_spaces_bucket_cors_configuration" "cors" {
   count = length(var.cors_rules) > 0 ? 1 : 0
   
