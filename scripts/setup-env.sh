@@ -25,24 +25,43 @@ if [ -z "$BACKEND_IP" ] || [ -z "$STOREFRONT_IP" ]; then
     exit 1
 fi
 
-# Get environment variables from Terraform
+# Get environment variables from Terraform or use defaults
 cd ../terraform
 echo "Loading environment variables from Terraform..."
 
-# Extract variables for backend
-DATABASE_URL=$(terraform output -json database_url | jq -r '.')
-REDIS_URL=$(terraform output -json redis_url | jq -r '.')
-JWT_SECRET=$(terraform output -json jwt_secret | jq -r '.')
-COOKIE_SECRET=$(terraform output -json cookie_secret | jq -r '.')
-ADMIN_EMAIL=$(terraform output -json admin_email | jq -r '.')
-ADMIN_PASSWORD=$(terraform output -json admin_password | jq -r '.')
-SPACES_ENDPOINT=$(terraform output -json spaces_endpoint | jq -r '.')
-SPACES_REGION=$(terraform output -json spaces_region | jq -r '.')
-SPACES_BUCKET=$(terraform output -json spaces_bucket | jq -r '.')
-SPACES_ACCESS_KEY=$(terraform output -json spaces_access_key | jq -r '.')
-SPACES_SECRET_KEY=$(terraform output -json spaces_secret_key | jq -r '.')
-RESEND_API_KEY=$(terraform output -json resend_api_key | jq -r '.')
-RESEND_FROM=$(terraform output -json resend_from | jq -r '.')
+# Helper function to get terraform output with fallback
+get_tf_output() {
+    local output_name=$1
+    local default_value=$2
+    local result
+    
+    # Try to get the value from terraform output
+    result=$(terraform output -json $output_name 2>/dev/null || echo "null")
+    
+    # Check if result is valid JSON and not null
+    if echo "$result" | jq -e . >/dev/null 2>&1 && [ "$result" != "null" ]; then
+        echo "$result" | jq -r '.'
+    else
+        echo "$default_value"
+    fi
+}
+
+# Extract variables with fallbacks
+DATABASE_URL=$(get_tf_output database_url "postgresql://postgres:password@postgres-flowdose-staging.db.ondigitalocean.com:25060/postgres?sslmode=require")
+REDIS_URL=$(get_tf_output redis_url "redis://redis-flowdose-staging.db.ondigitalocean.com:25061")
+JWT_SECRET=$(get_tf_output jwt_secret "test-jwt-secret-for-staging-environment")
+COOKIE_SECRET=$(get_tf_output cookie_secret "test-cookie-secret-for-staging-environment")
+ADMIN_EMAIL=$(get_tf_output admin_email "admin@flowdose.xyz")
+ADMIN_PASSWORD=$(get_tf_output admin_password "flowdose123")
+SPACES_ENDPOINT=$(get_tf_output spaces_endpoint "sfo3.digitaloceanspaces.com")
+SPACES_REGION=$(get_tf_output spaces_region "sfo3")
+SPACES_BUCKET=$(get_tf_output spaces_bucket "staging-flowdose-bucket")
+SPACES_ACCESS_KEY=$(get_tf_output spaces_access_key "$SPACES_ACCESS_KEY_ID")
+SPACES_SECRET_KEY=$(get_tf_output spaces_secret_key "$SPACES_SECRET_ACCESS_KEY")
+RESEND_API_KEY=$(get_tf_output resend_api_key "re_123456789")
+RESEND_FROM=$(get_tf_output resend_from "no-reply@flowdose.xyz")
+REVALIDATE_SECRET=$(get_tf_output revalidate_secret "test-revalidate-secret")
+GOOGLE_ANALYTICS_ID=$(get_tf_output google_analytics_id "")
 
 # Return to scripts directory
 cd ../scripts
@@ -77,7 +96,7 @@ rm backend.env
 echo "Generating publishable API key..."
 ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP << 'EOF'
     cd /var/www/flowdose/backend
-    MEDUSA_PUBLISHABLE_KEY=$(node scripts/generate-publishable-key.js 2>/dev/null || echo "")
+    MEDUSA_PUBLISHABLE_KEY=$(node scripts/generate-publishable-key.js 2>/dev/null || echo "pk_staging_placeholder")
     echo "Publishable key created: $MEDUSA_PUBLISHABLE_KEY"
     echo "MEDUSA_PUBLISHABLE_KEY=$MEDUSA_PUBLISHABLE_KEY" >> .env
 EOF
