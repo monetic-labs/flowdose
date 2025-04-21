@@ -1,6 +1,6 @@
 locals {
-  backend_app_dir    = var.backend_app_dir != "" ? var.backend_app_dir : "/home/root/app"
-  storefront_app_dir = var.storefront_app_dir != "" ? var.storefront_app_dir : "/home/root/app"
+  backend_app_dir    = var.backend_app_dir != "" ? var.backend_app_dir : "/root/app"
+  storefront_app_dir = var.storefront_app_dir != "" ? var.storefront_app_dir : "/root/app"
 }
 
 # Deploy backend service
@@ -11,6 +11,20 @@ resource "null_resource" "deploy_backend" {
     force_deploy       = var.force_deploy_backend
     deploy_script_hash = md5(file("${path.module}/scripts/deploy_backend.sh"))
     droplet_id         = var.backend_droplet_id
+  }
+
+  # Create necessary directories first
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p ${local.backend_app_dir}"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.ssh_private_key_path)
+      host        = var.backend_droplet_ip
+    }
   }
 
   # Transfer deployment script to server
@@ -50,6 +64,20 @@ resource "null_resource" "deploy_storefront" {
     force_deploy       = var.force_deploy_storefront
     deploy_script_hash = md5(file("${path.module}/scripts/deploy_storefront.sh"))
     droplet_id         = var.storefront_droplet_id
+  }
+
+  # Create necessary directories first
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p ${local.storefront_app_dir}"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.ssh_private_key_path)
+      host        = var.storefront_droplet_ip
+    }
   }
 
   # Transfer deployment script to server

@@ -2,7 +2,7 @@
 set -e
 
 # Get parameters
-APP_DIR=${1:-/home/root/app}
+APP_DIR=${1:-/root/app}
 NODE_ENV=${2:-production}
 
 # Log deployment start
