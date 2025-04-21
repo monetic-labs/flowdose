@@ -84,13 +84,24 @@ jobs:
       - name: Destroy Existing Infrastructure
         working-directory: ./terraform
         run: |
-          # First try to destroy only the droplets
+          # Target database resources first since they're causing issues
+          echo "Destroying database resources..."
+          terraform destroy -auto-approve -var-file="terraform.tfvars" \
+            -target=module.postgres_db.digitalocean_database_cluster.this \
+            -target=module.redis_db.digitalocean_database_cluster.redis
+          
+          # Then destroy the droplets
+          echo "Destroying droplet resources..."
           terraform destroy -auto-approve -var-file="terraform.tfvars" \
             -target=module.backend_droplet \
-            -target=module.storefront_droplet || true
+            -target=module.storefront_droplet
           
-          # If that fails, try a full destroy
-          terraform destroy -auto-approve -var-file="terraform.tfvars" || true
+          # Finally attempt a full destroy for any remaining resources
+          echo "Performing full destroy for remaining resources..."
+          terraform destroy -auto-approve -var-file="terraform.tfvars"
+          
+          # Verify the state is empty or show what's left
+          terraform state list || echo "State is empty or has issues"
       
       - name: Terraform Apply
         working-directory: ./terraform

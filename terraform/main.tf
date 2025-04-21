@@ -47,7 +47,7 @@ module "storefront_droplet" {
 module "postgres_db" {
   source = "./modules/database"
 
-  name           = "postgres-flowdose-${var.environment}"
+  name           = "postgres-flowdose-${var.environment}-${formatdate("MMDD", timestamp())}"
   engine         = "pg"
   engine_version = var.postgres_version
   size           = var.db_size
@@ -68,7 +68,7 @@ module "postgres_db" {
 module "redis_db" {
   source = "./modules/redis"
 
-  name           = "redis-flowdose-${var.environment}"
+  name           = "redis-flowdose-${var.environment}-${formatdate("MMDD", timestamp())}"
   engine_version = var.redis_version
   size           = var.redis_size
   region         = var.region
