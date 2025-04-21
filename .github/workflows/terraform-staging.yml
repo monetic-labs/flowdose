@@ -9,6 +9,7 @@ on:
       - 'storefront/**'
       - 'terraform/**'
       - '.github/workflows/terraform-*.yml'
+      - 'deploy-trigger'
 
 jobs:
   terraform:
