@@ -124,13 +124,13 @@ jobs:
           BACKEND_IP=$(terraform output -raw backend_ip | cut -d: -f1)
           STOREFRONT_IP=$(terraform output -raw storefront_ip | cut -d: -f1)
           
-          # Set GitHub outputs
-          echo "backend_ip=${BACKEND_IP}" >> $GITHUB_OUTPUT
-          echo "storefront_ip=${STOREFRONT_IP}" >> $GITHUB_OUTPUT
+          # Set GitHub outputs using the correct syntax for newer GitHub Actions
+          echo "backend_ip=$BACKEND_IP" >> "$GITHUB_OUTPUT"
+          echo "storefront_ip=$STOREFRONT_IP" >> "$GITHUB_OUTPUT"
           
           # Debug output
-          echo "Backend IP: ${BACKEND_IP}"
-          echo "Storefront IP: ${STOREFRONT_IP}"
+          echo "Backend IP: $BACKEND_IP"
+          echo "Storefront IP: $STOREFRONT_IP"
       
       - name: Wait for servers to initialize
         run: |
