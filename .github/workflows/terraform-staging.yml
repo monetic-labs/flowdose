@@ -34,7 +34,7 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
+          echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
           chmod 600 ~/.ssh/flowdose-do
           ssh-keyscan -H $(terraform output -raw backend_ip 2>/dev/null || echo "staging-flowdose-backend.domain.com") >> ~/.ssh/known_hosts
           ssh-keyscan -H $(terraform output -raw storefront_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
