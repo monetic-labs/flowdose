@@ -120,6 +120,7 @@ module "deployment" {
   source = "./modules/deployment"
 
   node_env = var.environment
+  environment = var.environment
 
   # Backend deployment
   backend_droplet_id    = module.backend_droplet.id
