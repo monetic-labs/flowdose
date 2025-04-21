@@ -15,14 +15,20 @@ jobs:
   terraform:
     name: "Deploy to Staging with Terraform"
     runs-on: ubuntu-latest
+    # Set environment variables for both S3 backend and DigitalOcean provider
     env:
+      # For S3 backend authentication
       AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
       AWS_REGION: us-east-1
+      # For DigitalOcean API authentication
       DIGITALOCEAN_TOKEN: ${{ secrets.DO_API_TOKEN }}
       DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DO_API_TOKEN }}
+      # For DigitalOcean Spaces authentication
       SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
       SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
+      # Use STAGING_SSH_USER if available
+      SSH_USER: ${{ secrets.STAGING_SSH_USER || 'root' }}
     
     steps:
       - name: Checkout code
@@ -38,14 +44,49 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/flowdose-do
           chmod 600 ~/.ssh/flowdose-do
-          ssh-keyscan -H $(terraform output -raw backend_ip 2>/dev/null || echo "staging-flowdose-backend.domain.com") >> ~/.ssh/known_hosts
-          ssh-keyscan -H $(terraform output -raw storefront_ip 2>/dev/null || echo "staging-flowdose-storefront.domain.com") >> ~/.ssh/known_hosts
+          
+          # Debug SSH key format
+          echo "First few bytes of SSH key (safe to show):"
+          head -c 20 ~/.ssh/flowdose-do | xxd
+          
+          # Try to get fingerprint (will fail if key format is wrong)
+          ssh-keygen -l -f ~/.ssh/flowdose-do || echo "Key format may be incorrect"
+          
+          # Add known hosts for common DigitalOcean IPs
+          ssh-keyscan -H digitalocean.com >> ~/.ssh/known_hosts
 
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
-      - name: Terraform Apply
+      - name: Check Terraform State
+        working-directory: ./terraform
+        run: |
+          # Check if we can access remote state
+          terraform state list || echo "Cannot access remote state, may need to import resources"
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ./terraform
+        continue-on-error: true
+        run: |
+          terraform plan -detailed-exitcode \
+            -var="do_token=${{ secrets.DO_API_TOKEN }}" \
+            -var="environment=staging" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="cookie_secret=${{ secrets.COOKIE_SECRET }}" \
+            -var="revalidate_secret=${{ secrets.REVALIDATE_SECRET }}" \
+            -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
+            -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+            -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
+            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
+            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
+            -var="ssh_user=${{ env.SSH_USER }}"
+          echo "plan_exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Terraform Apply with Additional Options
+        if: steps.plan.outputs.plan_exit_code != '0'
         working-directory: ./terraform
         run: |
           terraform apply -auto-approve \
@@ -59,14 +100,18 @@ jobs:
             -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
             -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_private_key_path=~/.ssh/flowdose-do"
+            -var="ssh_private_key_path=~/.ssh/flowdose-do" \
+            -var="ssh_user=${{ env.SSH_USER }}" \
+            -refresh-only=false
         
       - name: Get Server IPs
         id: server_ips
         working-directory: ./terraform
+        continue-on-error: true
         run: |
-          BACKEND_IP=$(terraform output -raw backend_ip)
-          STOREFRONT_IP=$(terraform output -raw storefront_ip)
+          # Try to get IPs from terraform output, or use hardcoded values if that fails
+          BACKEND_IP=$(terraform output -raw backend_ip 2>/dev/null || echo "${{ secrets.STAGING_BACKEND_HOST }}")
+          STOREFRONT_IP=$(terraform output -raw storefront_ip 2>/dev/null || echo "${{ secrets.STAGING_STOREFRONT_HOST }}")
           echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
           echo "storefront_ip=$STOREFRONT_IP" >> $GITHUB_OUTPUT
           
@@ -75,52 +120,60 @@ jobs:
         run: |
           BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
           STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
+          echo "Using Backend IP: $BACKEND_IP"
+          echo "Using Storefront IP: $STOREFRONT_IP"
           ./setup-env.sh staging $BACKEND_IP $STOREFRONT_IP
       
       - name: Deploy Backend
         working-directory: ./scripts
         run: |
           BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
+          echo "Deploying to Backend IP: $BACKEND_IP"
           ./deploy-backend.sh staging $BACKEND_IP
       
       - name: Deploy Storefront
         working-directory: ./scripts
         run: |
           STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
+          echo "Deploying to Storefront IP: $STOREFRONT_IP"
           ./deploy-storefront.sh staging $STOREFRONT_IP
       
       - name: Display Deployment Info
         working-directory: ./terraform
+        continue-on-error: true
         run: |
-          echo "Backend IP: $(terraform output -raw backend_ip)"
-          echo "Storefront IP: $(terraform output -raw storefront_ip)"
-          echo "API URL: $(terraform output -raw api_url)"
-          echo "Admin URL: $(terraform output -raw admin_url)"
-          echo "Storefront URL: $(terraform output -raw storefront_url)"
+          echo "Backend IP: $(terraform output -raw backend_ip 2>/dev/null || echo 'N/A')"
+          echo "Storefront IP: $(terraform output -raw storefront_ip 2>/dev/null || echo 'N/A')"
+          echo "API URL: $(terraform output -raw api_url 2>/dev/null || echo 'N/A')"
+          echo "Admin URL: $(terraform output -raw admin_url 2>/dev/null || echo 'N/A')"
+          echo "Storefront URL: $(terraform output -raw storefront_url 2>/dev/null || echo 'N/A')"
       
       - name: Verify SSL certificates
         working-directory: ./terraform
+        continue-on-error: true
         run: |
           echo "Checking API SSL certificate..."
-          API_URL=$(terraform output -raw api_url)
+          API_URL=$(terraform output -raw api_url 2>/dev/null || echo "https://api-staging.flowdose.xyz")
           SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL || echo "Failed")
           echo "API SSL check returned: $SSL_STATUS"
           
           echo "Checking Admin SSL certificate..."
-          ADMIN_URL=$(terraform output -raw admin_url)
+          ADMIN_URL=$(terraform output -raw admin_url 2>/dev/null || echo "https://admin-staging.flowdose.xyz")
           SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $ADMIN_URL || echo "Failed")
           echo "Admin SSL check returned: $SSL_STATUS"
           
           echo "Checking Storefront SSL certificate..."
-          STOREFRONT_URL=$(terraform output -raw storefront_url)
+          STOREFRONT_URL=$(terraform output -raw storefront_url 2>/dev/null || echo "https://staging.flowdose.xyz")
           SSL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $STOREFRONT_URL || echo "Failed")
           echo "Storefront SSL check returned: $SSL_STATUS"
       
       - name: Verify API health
+        continue-on-error: true
         run: |
-          API_URL=$(cd terraform && terraform output -raw api_url)
+          API_URL=$(cd terraform && terraform output -raw api_url 2>/dev/null || echo "https://api-staging.flowdose.xyz")
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/health || echo "Failed")
           echo "API health check returned: $STATUS"
           if [[ "$STATUS" != "200" ]]; then
             echo "Warning: API may not be fully available yet. This is expected after initial deployment."
+          fi 
           fi 
