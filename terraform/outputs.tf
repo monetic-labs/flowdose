@@ -23,7 +23,7 @@ output "database_port" {
 
 output "database_name" {
   description = "The name of the database"
-  value       = module.postgres_db.database_names[0]
+  value       = length(module.postgres_db.database_names) > 0 ? module.postgres_db.database_names[0] : "postgres-flowdose-staging"
 }
 
 # Redis Information

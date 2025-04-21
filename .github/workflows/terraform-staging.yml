@@ -45,6 +45,16 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+      - name: Import Existing Resources
+        working-directory: ./terraform
+        run: |
+          # Import the existing resources
+          terraform import module.backend_droplet.digitalocean_droplet.this 490588379 || echo "Failed to import backend droplet"
+          terraform import module.storefront_droplet.digitalocean_droplet.this 490588593 || echo "Failed to import storefront droplet"
+          terraform import module.postgres_db.digitalocean_database_cluster.this 3df3033d-5702-440e-8b2b-291fcb532f52 || echo "Failed to import postgres db"
+          terraform import module.redis_db.digitalocean_database_cluster.redis f7981468-001b-4be3-80ff-710f2228c265 || echo "Failed to import redis db"
+          terraform import module.media_storage.digitalocean_spaces_bucket.this staging-flowdose-bucket || echo "Failed to import media storage bucket"
+
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
