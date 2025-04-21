@@ -68,7 +68,7 @@ jobs:
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="ssh_private_key_path=~/.ssh/flowdose-do"
           
-          # Apply only non-infrastructure resources to avoid recreation
+          # Apply only env_config_generation module to avoid SSH issues
           terraform apply -auto-approve \
             -var="do_token=${{ secrets.DO_API_TOKEN }}" \
             -var="environment=staging" \
@@ -81,8 +81,7 @@ jobs:
             -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="ssh_private_key_path=~/.ssh/flowdose-do" \
-            -target=module.env_config_generation \
-            -target=module.deployment
+            -target=module.env_config_generation
         
       - name: Get Server IPs
         id: server_ips

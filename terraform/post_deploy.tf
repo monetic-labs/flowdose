@@ -50,6 +50,7 @@ module "env_config_generation" {
 }
 
 # Environment File Upload - Backend
+/*
 resource "null_resource" "upload_backend_env" {
   triggers = {
     droplet_id = module.backend_droplet.id
@@ -74,8 +75,15 @@ resource "null_resource" "upload_backend_env" {
     module.backend_droplet
   ]
 }
+*/
+
+# Use a local for the backend env upload ID since we've commented out the resource
+locals {
+  backend_env_upload_id = "disabled-backend-env-upload"
+}
 
 # Environment File Upload - Storefront
+/*
 resource "null_resource" "upload_frontend_env" {
   triggers = {
     droplet_id = module.storefront_droplet.id
@@ -100,6 +108,12 @@ resource "null_resource" "upload_frontend_env" {
     module.storefront_droplet
   ]
 }
+*/
+
+# Use a local for the frontend env upload ID since we've commented out the resource
+locals {
+  frontend_env_upload_id = "disabled-frontend-env-upload"
+}
 
 # Deployment Module - Now only depends on the uploaded environment files
 module "deployment" {
@@ -110,21 +124,20 @@ module "deployment" {
   # Backend deployment
   backend_droplet_id    = module.backend_droplet.id
   backend_droplet_ip    = module.backend_droplet.ipv4_address
-  backend_env_upload_id = null_resource.upload_backend_env.id
+  backend_env_upload_id = local.backend_env_upload_id
   force_deploy_backend  = var.force_deploy_backend
 
   # Storefront deployment
   storefront_droplet_id   = module.storefront_droplet.id
   storefront_droplet_ip   = module.storefront_droplet.ipv4_address
-  frontend_env_upload_id  = null_resource.upload_frontend_env.id
+  frontend_env_upload_id  = local.frontend_env_upload_id
   force_deploy_storefront = var.force_deploy_storefront
 
   # SSH
   ssh_private_key_path = var.ssh_private_key_path
 
-  # This makes it clear that the deployment depends on the environment files being uploaded
+  # Remove dependencies on the env upload resources
   depends_on = [
-    null_resource.upload_backend_env,
-    null_resource.upload_frontend_env
+    module.env_config_generation
   ]
 } 
