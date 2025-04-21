@@ -28,14 +28,38 @@ if ! command -v pm2 &> /dev/null; then
   npm install -g pm2
 fi
 
-# Change to app directory
-cd $APP_DIR
+# Install git if not already installed
+if ! command -v git &> /dev/null; then
+  echo "Installing git..."
+  apt-get update
+  apt-get install -y git --no-install-recommends
+fi
 
-# Clone repository if not exists
-if [ ! -f "$APP_DIR/package.json" ]; then
-  echo "Cloning repository..."
+# Set up the repository
+if [ ! -d "$APP_DIR" ]; then
+  # Directory doesn't exist, create it and clone
+  echo "Creating app directory and cloning repository..."
+  mkdir -p $APP_DIR
+  cd $APP_DIR
   git clone https://github.com/monetic-labs/flowdose.git .
-  cd storefront
+elif [ ! -d "$APP_DIR/.git" ]; then
+  # Directory exists but no git repo, clean and clone
+  echo "Cleaning directory and cloning repository..."
+  rm -rf $APP_DIR/*
+  cd $APP_DIR
+  git clone https://github.com/monetic-labs/flowdose.git .
+else
+  # Git repo exists, just pull latest
+  echo "Updating existing repository..."
+  cd $APP_DIR
+  git fetch
+  git reset --hard origin/main
+fi
+
+# Navigate to storefront directory if it exists
+if [ -d "$APP_DIR/storefront" ]; then
+  echo "Changing to storefront directory..."
+  cd $APP_DIR/storefront
 fi
 
 # Install dependencies
