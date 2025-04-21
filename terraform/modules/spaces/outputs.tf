@@ -1,34 +1,34 @@
 output "id" {
   description = "The name of the bucket"
-  value       = digitalocean_spaces_bucket.this.id
+  value       = local.bucket_name
 }
 
 output "name" {
   description = "The name of the bucket"
-  value       = digitalocean_spaces_bucket.this.name
+  value       = local.bucket_name
 }
 
 output "region" {
   description = "The region of the bucket"
-  value       = digitalocean_spaces_bucket.this.region
+  value       = local.bucket_region
 }
 
 output "bucket_domain_name" {
   description = "The domain name of the bucket"
-  value       = digitalocean_spaces_bucket.this.bucket_domain_name
+  value       = local.bucket_domain_name
 }
 
 output "urn" {
   description = "The uniform resource name for the bucket"
-  value       = digitalocean_spaces_bucket.this.urn
+  value       = local.urn
 }
 
 output "endpoint" {
   description = "The endpoint URL of the bucket"
-  value       = "${var.region}.digitaloceanspaces.com/${var.name}"
+  value       = local.endpoint
 }
 
 output "cdn_endpoint" {
   description = "The endpoint URL of the CDN"
-  value       = var.enable_cdn ? digitalocean_cdn.cdn[0].endpoint : null
+  value       = var.enable_cdn ? null : null  # No CDN in this case
 } 
