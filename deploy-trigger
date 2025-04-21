@@ -1,4 +1,4 @@
-DEPLOY_TRIGGER=7
+DEPLOY_TRIGGER=8
 # Change this number and commit to force a deployment without changing any files in backend or storefront
 # Last updated: 2025-04-19
 # This file is used to trigger deployments
