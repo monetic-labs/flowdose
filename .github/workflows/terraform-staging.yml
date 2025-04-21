@@ -15,6 +15,10 @@ jobs:
   terraform:
     name: "Deploy to Staging with Terraform"
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
+      AWS_REGION: us-east-1
     
     steps:
       - name: Checkout code
@@ -35,19 +39,10 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./terraform
-        env:
-          DO_SPACES_ACCESS_KEY: ${{ secrets.SPACES_ACCESS_KEY }}
-          DO_SPACES_SECRET_KEY: ${{ secrets.SPACES_SECRET_KEY }}
-        run: |
-          terraform init \
-            -backend-config="access_key=$DO_SPACES_ACCESS_KEY" \
-            -backend-config="secret_key=$DO_SPACES_SECRET_KEY"
+        run: terraform init
 
       - name: Terraform Apply
         working-directory: ./terraform
-        env:
-          DO_SPACES_ACCESS_KEY: ${{ secrets.SPACES_ACCESS_KEY }}
-          DO_SPACES_SECRET_KEY: ${{ secrets.SPACES_SECRET_KEY }}
         run: |
           terraform apply -auto-approve \
             -var="do_token=${{ secrets.DO_API_TOKEN }}" \
@@ -58,8 +53,8 @@ jobs:
             -var="admin_email=${{ secrets.ADMIN_EMAIL }}" \
             -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
             -var="resend_api_key=${{ secrets.RESEND_API_KEY }}" \
-            -var="spaces_access_key=$DO_SPACES_ACCESS_KEY" \
-            -var="spaces_secret_key=$DO_SPACES_SECRET_KEY" \
+            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="ssh_private_key_path=~/.ssh/flowdose-do"
         
       - name: Get Server IPs
