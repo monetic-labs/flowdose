@@ -48,6 +48,10 @@ jobs:
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
+          # First refresh the state to see current resources
+          terraform plan -refresh-only
+          
+          # Then apply with auto-approve
           terraform apply -auto-approve \
             -var="do_token=${{ secrets.DO_API_TOKEN }}" \
             -var="environment=staging" \
