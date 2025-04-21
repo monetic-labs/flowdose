@@ -1,4 +1,5 @@
-# Use local values for existing bucket
+# Use local values for existing bucket instead of creating resources
+# This avoids Terraform trying to recreate or modify existing Spaces buckets
 locals {
   bucket_name = var.name
   bucket_region = var.region
@@ -7,6 +8,9 @@ locals {
   urn = "do:space:${var.name}"
   name = var.name
 }
+
+# CORS and CDN configuration is handled manually outside of Terraform
+# to prevent modification of existing resources.
 
 # CORS configuration as a separate resource (recommended approach)
 resource "digitalocean_spaces_bucket_cors_configuration" "cors" {
