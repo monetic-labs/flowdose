@@ -144,3 +144,30 @@ module "ssl" {
   # Ensure this runs after DNS is configured
   depends_on = [module.dns]
 }
+
+# Configure deployment and application setup
+module "deployment" {
+  source = "./modules/deployment"
+
+  # Environment settings
+  node_env    = "production"
+  environment = var.environment
+
+  # Backend settings
+  backend_droplet_id   = module.backend_droplet.id
+  backend_droplet_ip   = module.backend_droplet.ipv4_address
+  backend_env_upload_id = module.env_config_generation.backend_env_id
+  force_deploy_backend = var.force_deploy_backend
+
+  # Storefront settings
+  storefront_droplet_id   = module.storefront_droplet.id
+  storefront_droplet_ip   = module.storefront_droplet.ipv4_address
+  frontend_env_upload_id  = module.env_config_generation.frontend_env_id
+  force_deploy_storefront = var.force_deploy_storefront
+
+  # SSH access
+  ssh_private_key_path = var.ssh_private_key_path
+
+  # Depend on the SSL configuration to ensure it's in place
+  depends_on = [module.ssl]
+}

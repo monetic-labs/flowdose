@@ -4,6 +4,12 @@ variable "node_env" {
   default     = "production"
 }
 
+variable "environment" {
+  description = "The deployment environment (staging, production)"
+  type        = string
+  default     = "staging"
+}
+
 # Backend variables
 variable "backend_droplet_id" {
   description = "The ID of the backend droplet (if created)"

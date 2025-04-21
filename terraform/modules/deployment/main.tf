@@ -97,7 +97,7 @@ resource "null_resource" "deploy_storefront" {
   provisioner "remote-exec" {
     inline = [
       "chmod +x ${local.storefront_app_dir}/deploy.sh",
-      "${local.storefront_app_dir}/deploy.sh ${local.storefront_app_dir} ${var.node_env}"
+      "${local.storefront_app_dir}/deploy.sh ${local.storefront_app_dir} ${var.node_env} https://api-${var.environment}.flowdose.xyz"
     ]
 
     connection {

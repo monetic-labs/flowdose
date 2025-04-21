@@ -4,6 +4,7 @@ set -e
 # Get parameters
 APP_DIR=${1:-/root/app}
 NODE_ENV=${2:-production}
+BACKEND_URL=${3:-"https://api-staging.flowdose.xyz"}
 
 # Log deployment start
 echo "Starting Storefront deployment in $APP_DIR for environment $NODE_ENV"
@@ -62,6 +63,14 @@ if [ -d "$APP_DIR/storefront" ]; then
   cd $APP_DIR/storefront
 fi
 
+# Create a temporary .env file with required variables
+echo "Creating .env file with required variables..."
+cat > .env.local << EOF
+# Medusa backend
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=$BACKEND_URL
+NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY="pk_01HZG9MF37MJDRR67PDPRV8JJ9"
+EOF
+
 # Install dependencies
 echo "Installing dependencies..."
 yarn install
@@ -76,7 +85,7 @@ if pm2 show nextjs-storefront > /dev/null 2>&1; then
   pm2 restart nextjs-storefront
 else
   echo "Creating new PM2 service..."
-  pm2 start --name nextjs-storefront "cd $APP_DIR && yarn start"
+  pm2 start --name nextjs-storefront "cd $APP_DIR/storefront && yarn start"
 fi
 
 echo "Storefront deployment completed successfully" 
