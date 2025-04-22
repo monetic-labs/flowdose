@@ -117,20 +117,35 @@ jobs:
           terraform apply -auto-approve -var-file="terraform.tfvars"
         
       - name: Get Server IPs
-        id: server_ips
         working-directory: ./terraform
         run: |
-          # Get IPs from the terraform outputs and clean up any debug output
-          BACKEND_IP=$(terraform output -raw backend_ip | cut -d: -f1)
-          STOREFRONT_IP=$(terraform output -raw storefront_ip | cut -d: -f1)
+          # Get IPs from terraform outputs with extra safety
+          echo "Running terraform output commands..."
+          BACKEND_IP=$(terraform output -raw backend_ip)
+          STOREFRONT_IP=$(terraform output -raw storefront_ip)
           
-          # Set GitHub outputs using the correct syntax for newer GitHub Actions
-          echo "backend_ip=$BACKEND_IP" >> "$GITHUB_OUTPUT"
-          echo "storefront_ip=$STOREFRONT_IP" >> "$GITHUB_OUTPUT"
+          # Clean up any special characters just in case
+          BACKEND_IP=$(echo "$BACKEND_IP" | tr -cd '0-9.')
+          STOREFRONT_IP=$(echo "$STOREFRONT_IP" | tr -cd '0-9.')
           
-          # Debug output
-          echo "Backend IP: $BACKEND_IP"
-          echo "Storefront IP: $STOREFRONT_IP"
+          # Export IPs as environment variables for subsequent steps
+          echo "BACKEND_IP=${BACKEND_IP}" >> $GITHUB_ENV
+          echo "STOREFRONT_IP=${STOREFRONT_IP}" >> $GITHUB_ENV
+          
+          # Debug - print values
+          echo "Backend IP: ${BACKEND_IP}"
+          echo "Storefront IP: ${STOREFRONT_IP}"
+          
+          # Debug - verify GITHUB_ENV exists
+          echo "GITHUB_ENV file location: $GITHUB_ENV"
+          echo "GITHUB_ENV file contents:"
+          cat $GITHUB_ENV || echo "Cannot read GITHUB_ENV file"
+      
+      - name: Verify Environment Variables
+        run: |
+          echo "Checking if environment variables were set correctly:"
+          echo "BACKEND_IP: $BACKEND_IP"
+          echo "STOREFRONT_IP: $STOREFRONT_IP"
       
       - name: Wait for servers to initialize
         run: |
@@ -140,20 +155,16 @@ jobs:
       - name: Setup Environment Variables
         working-directory: ./scripts
         run: |
-          BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
-          STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
           ./setup-env.sh staging $BACKEND_IP $STOREFRONT_IP
       
       - name: Deploy Backend
         working-directory: ./scripts
         run: |
-          BACKEND_IP="${{ steps.server_ips.outputs.backend_ip }}"
           ./deploy-backend.sh staging $BACKEND_IP
       
       - name: Deploy Storefront
         working-directory: ./scripts
         run: |
-          STOREFRONT_IP="${{ steps.server_ips.outputs.storefront_ip }}"
           ./deploy-storefront.sh staging $STOREFRONT_IP
       
       - name: Display Deployment Info
