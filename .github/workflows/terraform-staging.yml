@@ -75,6 +75,7 @@ jobs:
           spaces_secret_key="${{ secrets.SPACES_SECRET_KEY }}"
           ssh_private_key_path="$HOME/.ssh/id_rsa"
           ssh_public_key="${{ env.SSH_PUBLIC_KEY }}"
+          admin_ssh_public_key="${{ secrets.ADMIN_SSH_PUBLIC_KEY }}"
           EOF
 
       - name: Terraform Init
@@ -201,4 +202,29 @@ jobs:
           echo "API health check returned: $STATUS"
           if [[ "$STATUS" != "200" ]]; then
             echo "Warning: API may not be fully available yet. This is expected after initial deployment."
-          fi 
+          fi
+      
+      - name: Verify DNS Records
+        run: |
+          echo "Verifying DNS records..."
+          
+          # Get actual IPs from Terraform state
+          BACKEND_IP=$(cd terraform && terraform output -raw backend_ip)
+          STOREFRONT_IP=$(cd terraform && terraform output -raw storefront_ip)
+          
+          echo "Expected Backend IP (from Terraform): $BACKEND_IP"
+          echo "Expected Storefront IP (from Terraform): $STOREFRONT_IP"
+          
+          # Get domain names
+          API_DOMAIN=$(cd terraform && terraform output -raw api_url | sed 's/https:\/\///')
+          STOREFRONT_DOMAIN=$(cd terraform && terraform output -raw storefront_url | sed 's/https:\/\///')
+          
+          echo "API Domain: $API_DOMAIN"
+          echo "Storefront Domain: $STOREFRONT_DOMAIN"
+          
+          # Use dig to check actual DNS resolution
+          echo "Checking DNS resolution..."
+          echo "API domain resolves to: $(dig +short $API_DOMAIN)"
+          echo "Storefront domain resolves to: $(dig +short $STOREFRONT_DOMAIN)"
+          
+          echo "DNS verification complete. Note that DNS propagation may take some time." 

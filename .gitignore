@@ -81,4 +81,4 @@ terraform/**/*.tfvars.json
 terraform/**/secrets.tfvars
 
 # Generated files
-terraform/**/generated/
+terraform/**/generated/terraform.tfstate*

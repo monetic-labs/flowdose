@@ -53,6 +53,12 @@ variable "ssh_public_key" {
   default     = ""
 }
 
+variable "admin_ssh_public_key" {
+  description = "Admin SSH public key for persistent access to droplets"
+  type        = string
+  default     = ""
+}
+
 variable "ssh_private_key_path" {
   description = "Path to SSH private key used for provisioning"
   type        = string

@@ -38,6 +38,9 @@
 - [Quickstart](#quickstart)
 - [Update](#update)
 - [Resources](#resources)
+- [Deployment](#deployment)
+  - [SSH Key Management](docs/ssh-key-management.md)
+  - [DNS & SSL Management](docs/dns-ssl-management.md)
 - [Contributors](#contributors)
 
 &nbsp;
