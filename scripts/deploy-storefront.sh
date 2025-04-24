@@ -95,13 +95,13 @@ else
         fi
         
         # Install dependencies
-        npm ci
+        yarn install
         
         # Build the application
-        npm run build
+        yarn build
         
         # Start the application with PM2 on port 8000
-        pm2 start npm --name "next" -- start
+        pm2 start yarn --name "next" -- start
         
         # Save the PM2 configuration
         pm2 save

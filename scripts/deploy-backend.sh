@@ -97,17 +97,17 @@ else
         fi
         
         # Install dependencies
-        npm ci
+        yarn install
         
         # Build the application
-        npm run build
+        yarn build
         
         # Run database migrations
-        npx medusa migrations run
+        yarn medusa migrations run
         
         # Start the application with PM2 in correct mode
-        pm2 start npm --name "medusa-server" -- run start:server
-        pm2 start npm --name "medusa-worker" -- run start:worker
+        pm2 start yarn --name "medusa-server" -- start:server
+        pm2 start yarn --name "medusa-worker" -- start:worker
         
         # Save the PM2 configuration
         pm2 save
