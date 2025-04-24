@@ -327,8 +327,7 @@ EOS
     
     # Make sure PM2 uses the correct DATABASE_URL from the .env file
     echo "Ensuring PM2 processes use the correct environment..."
-    pm2 start yarn --name "medusa-server" -- start:server
-    pm2 start yarn --name "medusa-worker" -- start:worker
+    pm2 start yarn --name "medusa-server" -- start
     
     # Save the PM2 configuration
     pm2 save
