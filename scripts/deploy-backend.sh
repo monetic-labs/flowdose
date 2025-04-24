@@ -138,29 +138,40 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     # Create parent directory if it doesn't exist
     mkdir -p /root/app
     
-    # Clone only the backend directory using sparse checkout
-    echo "Cloning only the backend directory..."
+    # Clone only the backend directory
+    echo "Attempting to clone backend directory..."
     cd /root/app
 
-    # Create a temporary directory for the clone
-    echo "Creating temporary clone..."
-    mkdir -p /root/app/temp-repo
+    # Add extensive debugging
+    echo "DEBUG: Current directory: $(pwd)"
+    echo "DEBUG: Current user: $(whoami)"
+    echo "DEBUG: Directory contents before clone:"
+    ls -la
 
-    # Clone without checking out any files initially
-    git clone --no-checkout https://github.com/monetic-labs/flowdose.git /root/app/temp-repo
+    # Simple direct clone approach with full output
+    echo "Cloning repository..."
+    # Use -v for verbose output to see exactly what git is doing
+    if git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git /root/app/temp-repo; then
+        echo "Clone operation reported success."
+    else
+        echo "ERROR: Git clone operation failed with exit code $?"
+        exit 1
+    fi
 
-    # Setup sparse checkout for just the backend directory
-    cd /root/app/temp-repo
-    git sparse-checkout init --cone
-    git sparse-checkout set backend
+    echo "DEBUG: Directory contents after clone:"
+    ls -la
+    echo "DEBUG: Temp repo contents:"
+    ls -la /root/app/temp-repo || echo "Can't list temp-repo contents!"
 
-    # Checkout the specific branch
-    echo "Checking out branch: \$BRANCH"
-    git checkout \$BRANCH
-
-    # Verify the backend directory exists
-    if [ ! -d "/root/app/temp-repo/backend" ]; then
-        echo "ERROR: Backend directory not found after sparse checkout. Deployment aborted."
+    # Check if the backend directory exists in the cloned repo
+    if [ -d "/root/app/temp-repo/backend" ]; then
+        echo "Backend directory found in the cloned repository."
+        echo "DEBUG: Backend directory contents:"
+        ls -la /root/app/temp-repo/backend
+    else
+        echo "ERROR: Backend directory not found in the cloned repository at /root/app/temp-repo/backend"
+        echo "DEBUG: Contents of clone root:"
+        find /root/app/temp-repo -maxdepth 2 -type d | sort
         exit 1
     fi
 
@@ -174,9 +185,28 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Moving backend directory to deployment location..."
     mv /root/app/temp-repo/backend /root/app/
 
+    # Verify the move was successful
+    if [ -d "/root/app/backend" ]; then
+        echo "Backend directory successfully moved to /root/app/backend"
+        echo "DEBUG: Backend directory contents:"
+        ls -la /root/app/backend
+    else
+        echo "ERROR: Failed to move backend directory!"
+        exit 1
+    fi
+
     # Clean up the temporary repo
     echo "Cleaning up temporary repository..."
     rm -rf /root/app/temp-repo
+
+    # Extra verification step for package.json
+    if [ -f "/root/app/backend/package.json" ]; then
+        echo "Verified package.json exists in backend directory."
+    else
+        echo "ERROR: package.json not found in backend directory."
+        echo "This indicates a problem with the repository structure or clone operation."
+        exit 1
+    fi
     
     # Stop any running PM2 processes
     echo "Stopping PM2 processes..."
