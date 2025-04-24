@@ -135,28 +135,26 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
         mv /root/app/backend /root/app/backend.old
     fi
     
-    # Create parent directory if it doesn't exist
-    mkdir -p /root/app
-    
-    # Clone only the backend directory
+    # === SERVER IDENTIFICATION DETAILS ===
     echo "=== SERVER IDENTIFICATION DETAILS ==="
-    echo "Hostname: $(hostname)"
-    echo "IP Addresses: $(hostname -I || echo 'hostname -I command not available')"
-    echo "Current directory: $(pwd)"
-    echo "OS Information: $(cat /etc/os-release | grep "PRETTY_NAME" || echo 'OS info not available')"
-    echo "Kernel version: $(uname -a)"
-    echo "Current user: $(whoami)"
-    echo "User home directory: $HOME"
-    echo "Memory: $(free -h | head -2 || echo 'free command not available')"
-    echo "Disk space: $(df -h / | tail -1 || echo 'df command not available')"
-    echo "Process tree: $(ps axjf | head -10 || echo 'ps command not available')"
-    echo "SSH session details: $SSH_CLIENT $SSH_TTY"
-    echo "Parent process: $(ps -o cmd= -p $PPID || echo 'ps command not available')"
+    echo "Hostname: \$(hostname)"
+    echo "IP Addresses: \$(hostname -I)"
+    echo "Current directory: \$(pwd)"
+    echo "OS Information: \$(cat /etc/os-release | grep "PRETTY_NAME")"
+    echo "Kernel version: \$(uname -a)"
+    echo "Current user: \$(whoami)"
+    echo "User home directory: \$HOME"
+    echo "Memory: \$(free -h | head -2)"
+    echo "Disk space: \$(df -h / | tail -1)"
+    echo "Process tree: \$(ps axjf | head -5)"
+    echo "SSH session details: \$SSH_CLIENT \$SSH_TTY"
+    echo "All directories in /root: \$(ls -la /root)"
+    echo "All directories in /root/app: \$(ls -la /root/app || echo 'Directory not found')"
     echo "=====================================
 
     # Add extensive debugging
-    echo "DEBUG: Current directory: $(pwd)"
-    echo "DEBUG: Current user: $(whoami)"
+    echo "DEBUG: Current directory: \$(pwd)"
+    echo "DEBUG: Current user: \$(whoami)"
     echo "DEBUG: Directory contents before clone:"
     ls -la
 
@@ -168,7 +166,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Creating temp directory with explicit permissions"
     mkdir -p $TEMP_REPO_DIR
     chmod 777 $TEMP_REPO_DIR
-    echo "DEBUG: Temp directory created: $(ls -ld $TEMP_REPO_DIR)"
+    echo "DEBUG: Temp directory created: \$(ls -ld $TEMP_REPO_DIR)"
 
     # Simple direct clone approach with full output
     echo "Cloning repository with absolute paths..."
@@ -188,7 +186,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
             exit 1
         fi
     else
-        echo "ERROR: Git clone operation failed with exit code $?"
+        echo "ERROR: Git clone operation failed with exit code \$?"
         exit 1
     fi
 
