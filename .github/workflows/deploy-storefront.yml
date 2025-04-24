@@ -53,6 +53,17 @@ jobs:
         working-directory: storefront
         run: yarn build
       
+      - name: Generate environment file
+        run: |
+          cat > storefront/.env.${{ env.NODE_ENV }} << EOL
+          NEXT_PUBLIC_MEDUSA_BACKEND_URL=${{ secrets.STOREFRONT_NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
+          NEXT_PUBLIC_BASE_URL=${{ secrets.STOREFRONT_NEXT_PUBLIC_BASE_URL }}
+          REVALIDATE_SECRET=${{ secrets.STOREFRONT_REVALIDATE_SECRET }}
+          EOL
+          # Copy to temp location for deployment
+          mkdir -p /tmp
+          cp storefront/.env.${{ env.NODE_ENV }} /tmp/storefront.env
+      
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -67,10 +78,6 @@ jobs:
         run: |
           chmod +x ./scripts/deploy-storefront.sh
           ./scripts/deploy-storefront.sh ${{ env.NODE_ENV }} ${{ secrets[format('STOREFRONT_{0}_IP', env.NODE_ENV == 'production' && 'PROD' || 'STAGING')] }}
-        env:
-          STOREFRONT_NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${{ secrets.STOREFRONT_NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
-          STOREFRONT_NEXT_PUBLIC_BASE_URL: ${{ secrets.STOREFRONT_NEXT_PUBLIC_BASE_URL }}
-          STOREFRONT_REVALIDATE_SECRET: ${{ secrets.STOREFRONT_REVALIDATE_SECRET }}
       
       - name: Verify deployment
         if: success()

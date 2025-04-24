@@ -53,6 +53,22 @@ jobs:
         working-directory: backend
         run: yarn build
       
+      - name: Generate environment file
+        run: |
+          cat > backend/.env.${{ env.NODE_ENV }} << EOL
+          DATABASE_URL=${{ secrets.BACKEND_DATABASE_URL }}
+          REDIS_URL=${{ secrets.BACKEND_REDIS_URL }}
+          JWT_SECRET=${{ secrets.BACKEND_JWT_SECRET }}
+          COOKIE_SECRET=${{ secrets.BACKEND_COOKIE_SECRET }}
+          MEDUSA_ADMIN_CORS=${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}
+          MEDUSA_STORE_CORS=${{ secrets.BACKEND_MEDUSA_STORE_CORS }}
+          STORE_CORS=${{ secrets.BACKEND_STORE_CORS }}
+          MEDUSA_BACKEND_URL=${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}
+          EOL
+          # Copy to temp location for deployment
+          mkdir -p /tmp
+          cp backend/.env.${{ env.NODE_ENV }} /tmp/backend.env
+      
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -67,15 +83,6 @@ jobs:
         run: |
           chmod +x ./scripts/deploy-backend.sh
           ./scripts/deploy-backend.sh ${{ env.NODE_ENV }} ${{ secrets[format('BACKEND_{0}_IP', env.NODE_ENV == 'production' && 'PROD' || 'STAGING')] }}
-        env:
-          BACKEND_DATABASE_URL: ${{ secrets.BACKEND_DATABASE_URL }}
-          BACKEND_REDIS_URL: ${{ secrets.BACKEND_REDIS_URL }}
-          BACKEND_JWT_SECRET: ${{ secrets.BACKEND_JWT_SECRET }}
-          BACKEND_COOKIE_SECRET: ${{ secrets.BACKEND_COOKIE_SECRET }}
-          BACKEND_MEDUSA_ADMIN_CORS: ${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}
-          BACKEND_MEDUSA_STORE_CORS: ${{ secrets.BACKEND_MEDUSA_STORE_CORS }}
-          BACKEND_STORE_CORS: ${{ secrets.BACKEND_STORE_CORS }}
-          BACKEND_MEDUSA_BACKEND_URL: ${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}
       
       - name: Verify deployment
         if: success()

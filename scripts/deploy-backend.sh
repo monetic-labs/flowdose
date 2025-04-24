@@ -54,11 +54,20 @@ if [ "$CI_MODE" = true ]; then
 else
     echo "Deploying to $SSH_USER@$IP_ADDRESS..."
     
-    # Check environment variables
-    echo "Validating environment variables..."
-    # This script will create a .env file from GitHub secrets in CI
-    # or validate existing .env file in manual deployment
-    ./scripts/validate-backend-env.sh $ENV
+    # Check environment variables (only in non-CI mode)
+    if [ "$CI_MODE" != "true" ]; then
+        echo "Validating environment variables..."
+        # Try to find and run the validation script
+        if [ -f "./validate-backend-env.sh" ]; then
+            ./validate-backend-env.sh $ENV
+        elif [ -f "../scripts/validate-backend-env.sh" ]; then
+            ../scripts/validate-backend-env.sh $ENV
+        else
+            echo "Warning: Cannot find validate-backend-env.sh script. Skipping validation."
+        fi
+    else
+        echo "Skipping environment validation in CI mode. Using pre-generated env file."
+    fi
     
     # SSH to the backend server and perform deployment
     ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
@@ -67,7 +76,7 @@ else
             echo "Backend directory doesn't exist, creating..."
             mkdir -p /var/www/flowdose
             # Clone only the backend directory using sparse checkout
-            git clone --no-checkout https://github.com/yourusername/flowdose.git /var/www/flowdose/repo-temp
+            git clone --no-checkout https://github.com/monetic-labs/flowdose.git /var/www/flowdose/repo-temp
             cd /var/www/flowdose/repo-temp
             git sparse-checkout init --cone
             git sparse-checkout set backend
