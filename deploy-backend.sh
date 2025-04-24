@@ -42,7 +42,7 @@ if [ "$CI_MODE" = true ]; then
     echo "Deploying to $ENV environment in CI mode..."
     echo "CI mode: Would SSH to the server and run the following commands:"
     echo "  - Stop PM2 processes"
-    echo "  - Navigate to /var/www/flowdose/backend"
+    echo "  - Navigate to /root/app/backend"
     echo "  - Pull latest code from the backend directory"
     echo "  - Enable Corepack for Yarn 4"
     echo "  - Install dependencies"
@@ -68,17 +68,17 @@ else
     # SSH to the backend server and perform deployment
     ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
         # Check if directory exists, if not clone the repository
-        if [ ! -d "/var/www/flowdose/backend" ]; then
+        if [ ! -d "/root/app/backend" ]; then
             echo "Backend directory doesn't exist, creating..."
-            mkdir -p /var/www/flowdose
+            mkdir -p /root/app
             # Clone only the backend directory using sparse checkout
-            git clone --no-checkout https://github.com/monetic-labs/flowdose.git /var/www/flowdose/repo-temp
-            cd /var/www/flowdose/repo-temp
+            git clone --no-checkout https://github.com/monetic-labs/flowdose.git /root/app/repo-temp
+            cd /root/app/repo-temp
             git sparse-checkout init --cone
             git sparse-checkout set backend
             git checkout
-            mv backend /var/www/flowdose/
-            cd /var/www/flowdose
+            mv backend /root/app/
+            cd /root/app
             rm -rf repo-temp
         fi
         
@@ -86,7 +86,7 @@ else
         pm2 stop all || true
         
         # Navigate to backend directory
-        cd /var/www/flowdose/backend
+        cd /root/app/backend
         
         # Pull latest code
         if [ -d ".git" ]; then
@@ -97,8 +97,8 @@ else
         
         # Copy over the environment file (this would be uploaded in a separate step)
         if [ -f "/tmp/backend.env" ]; then
-            cp /tmp/backend.env /var/www/flowdose/backend/.env.${ENV}
-            ln -sf /var/www/flowdose/backend/.env.${ENV} /var/www/flowdose/backend/.env
+            cp /tmp/backend.env /root/app/backend/.env.${ENV}
+            ln -sf /root/app/backend/.env.${ENV} /root/app/backend/.env
             echo "Environment file updated."
         fi
         
