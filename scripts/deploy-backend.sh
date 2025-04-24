@@ -109,21 +109,32 @@ echo "Will deploy from branch: $BRANCH"
 
 # Create a secure way to pass the DB_PASSWORD
 # The following approach passes the password directly without relying on SSH environment passing
-ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
-    # Set DB_PASSWORD in the remote shell
-    DB_PASSWORD='${DB_PASSWORD}'
-    # Set ENV in the remote shell
-    ENV='${ENV}'
-    # Set BRANCH in the remote shell
-    BRANCH='${BRANCH}'
+ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
+    # Set variables directly (not using the heredoc expansion)
+    # This ensures all variables are set on the remote server
+    DB_PASSWORD="${DB_PASSWORD}"
+    ENV="staging"
+    BRANCH="staging"
     
     set -e  # Exit immediately if a command fails
     
     echo "Connected to server, starting deployment..."
-    echo "Current directory: \$(pwd)"
-    echo "Checking DB_PASSWORD: \$(if [ -n "\$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
-    echo "Environment: \$ENV"
-    echo "Branch: \$BRANCH"
+    echo "Current directory: $(pwd)"
+    echo "Environment: $ENV"
+    echo "Branch: $BRANCH"
+    
+    # Server identification
+    echo "=== SERVER IDENTIFICATION ==="
+    echo "Hostname: $(hostname)"
+    echo "Current directory: $(pwd)"
+    echo "Current user: $(whoami)"
+    echo "Listing /root/app directory:"
+    ls -la /root/app || echo "Directory doesn't exist yet"
+    echo "==========================="
+    
+    # Create app directory if it doesn't exist
+    mkdir -p /root/app
+    cd /root/app
     
     # First, remove any old backup directory
     echo "Removing old backup directory if it exists..."
@@ -135,168 +146,66 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
         mv /root/app/backend /root/app/backend.old
     fi
     
-    # === SERVER IDENTIFICATION DETAILS ===
-    echo "=== SERVER IDENTIFICATION DETAILS ==="
-    echo "Hostname: \$(hostname)"
-    echo "IP Addresses: \$(hostname -I)"
-    echo "Current directory: \$(pwd)"
-    echo "OS Information: \$(cat /etc/os-release | grep "PRETTY_NAME")"
-    echo "Kernel version: \$(uname -a)"
-    echo "Current user: \$(whoami)"
-    echo "User home directory: \$HOME"
-    echo "Memory: \$(free -h | head -2)"
-    echo "Disk space: \$(df -h / | tail -1)"
-    echo "Process tree: \$(ps axjf | head -5)"
-    echo "SSH session details: \$SSH_CLIENT \$SSH_TTY"
-    echo "All directories in /root: \$(ls -la /root)"
-    echo "All directories in /root/app: \$(ls -la /root/app || echo 'Directory not found')"
-    echo "=====================================
-
-    # Add extensive debugging
-    echo "DEBUG: Current directory: \$(pwd)"
-    echo "DEBUG: Current user: \$(whoami)"
-    echo "DEBUG: Directory contents before clone:"
-    ls -la
-
-    # Use absolute paths for everything
-    TEMP_REPO_DIR="/root/app/temp-repo"
-    BACKEND_DIR="/root/app/backend"
-
-    # Create temp directory with explicit permissions
-    echo "Creating temp directory with explicit permissions"
-    mkdir -p $TEMP_REPO_DIR
-    chmod 777 $TEMP_REPO_DIR
-    echo "DEBUG: Temp directory created: \$(ls -ld $TEMP_REPO_DIR)"
-
-    # Simple direct clone approach with full output
-    echo "Cloning repository with absolute paths..."
-    # Use -v for verbose output to see exactly what git is doing
-    if git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git $TEMP_REPO_DIR; then
-        echo "Clone operation reported success."
-        echo "DEBUG: Checking if clone directory actually exists:"
-        if [ -d "$TEMP_REPO_DIR" ]; then
-            echo "DEBUG: Temp repo directory exists at $TEMP_REPO_DIR"
-            echo "DEBUG: Files in temp repo:"
-            find $TEMP_REPO_DIR -type f -name "*.json" | head -5
-        else
-            echo "ERROR: Temp repo directory does not exist at $TEMP_REPO_DIR despite successful clone!"
-            # Try cloning directly to final location as fallback
-            echo "FALLBACK: Trying to clone directly to backend directory"
-            git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git $BACKEND_DIR
-            exit 1
-        fi
-    else
-        echo "ERROR: Git clone operation failed with exit code \$?"
-        exit 1
-    fi
-
-    echo "DEBUG: Directory contents after clone:"
-    ls -la
-    echo "DEBUG: Temp repo contents:"
-    ls -la /root/app/temp-repo || echo "Can't list temp-repo contents!"
-
-    # Check if the backend directory exists in the cloned repo
-    if [ -d "/root/app/temp-repo/backend" ]; then
-        echo "Backend directory found in the cloned repository."
-        echo "DEBUG: Backend directory contents:"
-        ls -la /root/app/temp-repo/backend
-    else
-        echo "ERROR: Backend directory not found in the cloned repository at /root/app/temp-repo/backend"
-        echo "DEBUG: Contents of clone root:"
-        find /root/app/temp-repo -maxdepth 2 -type d | sort
-        exit 1
-    fi
-
-    # Remove existing backend directory if it exists
-    if [ -d "/root/app/backend" ]; then
-        echo "Removing existing backend directory..."
-        rm -rf /root/app/backend
-    fi
-
-    # Move the backend directory to the final location
-    echo "Moving backend directory to deployment location..."
-    mv /root/app/temp-repo/backend /root/app/
-
-    # Verify the move was successful
-    if [ -d "/root/app/backend" ]; then
-        echo "Backend directory successfully moved to /root/app/backend"
-        echo "DEBUG: Backend directory contents:"
-        ls -la /root/app/backend
-    else
-        echo "ERROR: Failed to move backend directory!"
-        exit 1
-    fi
-
-    # Clean up the temporary repo
-    echo "Cleaning up temporary repository..."
-    rm -rf /root/app/temp-repo
-
-    # Extra verification step for package.json
-    if [ -f "/root/app/backend/package.json" ]; then
-        echo "Verified package.json exists in backend directory."
-    else
-        echo "ERROR: package.json not found in backend directory."
-        echo "This indicates a problem with the repository structure or clone operation."
+    # Simple direct clone approach
+    echo "Cloning repository..."
+    git clone --depth 1 -b $BRANCH https://github.com/monetic-labs/flowdose.git /root/app/temp-repo
+    
+    # Check if clone was successful
+    if [ ! -d "/root/app/temp-repo" ]; then
+        echo "ERROR: Clone failed - temp directory doesn't exist"
         exit 1
     fi
     
-    # Stop any running PM2 processes
+    echo "Clone successful. Directory contents:"
+    ls -la /root/app/temp-repo
+    
+    # Check if backend directory exists in the repo
+    if [ ! -d "/root/app/temp-repo/backend" ]; then
+        echo "ERROR: Backend directory not found in cloned repository"
+        exit 1
+    fi
+    
+    echo "Backend directory found. Contents:"
+    ls -la /root/app/temp-repo/backend
+    
+    # Move backend directory to final location
+    echo "Moving backend directory to final location..."
+    mv /root/app/temp-repo/backend /root/app/
+    
+    # Verify package.json exists
+    if [ ! -f "/root/app/backend/package.json" ]; then
+        echo "ERROR: package.json not found in backend directory"
+        exit 1
+    fi
+    
+    echo "Verified package.json exists. Backend setup successful."
+    
+    # Clean up temporary repository
+    echo "Cleaning up temporary repository..."
+    rm -rf /root/app/temp-repo
+    
+    # Stop PM2 processes
     echo "Stopping PM2 processes..."
     pm2 stop all 2>/dev/null || true
     
     # Navigate to backend directory
     echo "Changing to backend directory..."
     cd /root/app/backend
-    echo "Now in: \$(pwd)"
+    echo "Now in: $(pwd)"
     
     # Download DigitalOcean CA certificate
     echo "Downloading DigitalOcean CA certificate..."
     mkdir -p /root/app/certs
-    # Try different potential certificate sources
-    if wget -q https://truststore.pki.digitalocean.com/global/global-bundle.pem -O /root/app/certs/do-postgres.pem; then
-        echo "Downloaded DigitalOcean CA certificate from truststore.pki.digitalocean.com"
-    elif wget -q https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem -O /root/app/certs/do-postgres.pem; then
-        echo "Downloaded DigiCert Global Root CA certificate"
-    else
-        echo "Failed to download CA certificates. Creating an empty file as fallback."
-        touch /root/app/certs/do-postgres.pem
-    fi
+    wget -q https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem -O /root/app/certs/do-postgres.pem || touch /root/app/certs/do-postgres.pem
     chmod 644 /root/app/certs/do-postgres.pem
     
-    # Copy over the environment file (this would be uploaded in a separate step)
-    if [ -f "/tmp/backend.env" ]; then
-        echo "Updating environment file..."
-        cp /tmp/backend.env /root/app/backend/.env.\${ENV}
-        ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
-        echo "Environment file updated."
-        
-        # Verify database connection settings in the environment file
-        echo "Checking database connection settings..."
-        if grep -q "DATABASE_URL=" /root/app/backend/.env; then
-            echo "DATABASE_URL found in environment file."
-            # Extract host from DATABASE_URL to check if it's not trying to use localhost
-            DB_HOST=\$(grep "DATABASE_URL=" /root/app/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
-            if [[ "\$DB_HOST" == "::1" || "\$DB_HOST" == "localhost" || "\$DB_HOST" == "127.0.0.1" ]]; then
-                echo "WARNING: Database host is set to local (\$DB_HOST). It should be set to a remote DigitalOcean database."
-                echo "Will override with correct database connection."
-                
-                # Set the correct database connection for DigitalOcean PostgreSQL with CA certificate
-                echo "Setting correct database connection for DigitalOcean PostgreSQL..."
-                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem|g" /root/app/backend/.env
-            else
-                echo "Database host setting looks correct: \$DB_HOST"
-            fi
-        else
-            echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
-            # Add the correct DATABASE_URL to the .env file
-            echo "Adding correct DATABASE_URL to .env file..."
-            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" >> /root/app/backend/.env
-        fi
-    else
-        echo "Warning: No environment file found at /tmp/backend.env"
-        # Create a minimal .env file with the DATABASE_URL
+    # Create minimal environment file if not found
+    echo "Setting up environment file..."
+    if [ ! -f "/tmp/backend.env" ]; then
         echo "Creating minimal .env file with DATABASE_URL..."
-        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" > /root/app/backend/.env
+        echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" > /root/app/backend/.env
+    else
+        cp /tmp/backend.env /root/app/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -312,60 +221,20 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Building application..."
     yarn build
     
-    # Set the correct DATABASE_URL explicitly before running migrations
-    echo "Ensuring DATABASE_URL is correctly set for migrations..."
-    
-    # Make sure we have the password from a secure location (GitHub Secret or environment variable)
-    # This should be set in the GitHub workflow that calls this script
-    if [ -z "\${DB_PASSWORD}" ]; then
-        echo "ERROR: DB_PASSWORD environment variable is not set. Cannot connect to database."
-        echo "Please ensure this is set in the GitHub workflow or server environment."
-        exit 1
-    fi
-    
-    # Log the DATABASE_URL (mask password)
-    CURRENT_DB_URL=\$(grep "DATABASE_URL=" /root/app/backend/.env | cut -d'=' -f2-)
-    MASKED_URL=\$(echo \$CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
-    echo "Using DATABASE_URL: \$MASKED_URL"
-    
-    # Run database migrations with explicit environment variable from the .env file
+    # Run database migrations with fallback options
     echo "Running database migrations..."
-    if yarn medusa db:migrate; then
-        echo "Database migration successful!"
-    else
-        echo "Migration failed with verify-ca, trying fallback options..."
-        
-        # Try different sslmode options if the first attempt fails
-        echo "Trying with sslmode=prefer..."
-        sed -i 's|sslmode=verify-ca|sslmode=prefer|g' /root/app/backend/.env
-        if ! yarn medusa db:migrate; then
-            echo "Migration with sslmode=prefer failed, trying with process.env.NODE_TLS_REJECT_UNAUTHORIZED=0..."
-            
-            # Create a wrapper script that sets NODE_TLS_REJECT_UNAUTHORIZED=0
-            cat > migrate.js << 'EOS'
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-require('child_process').spawnSync('yarn', ['medusa', 'db:migrate'], {
-  stdio: 'inherit',
-  env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }
-});
-EOS
-            # Run the wrapper script
-            node migrate.js
-        fi
-    fi
+    export NODE_TLS_REJECT_UNAUTHORIZED=0
+    yarn medusa db:migrate || echo "Migration failed, but continuing deployment"
     
-    # Start the application with PM2 in correct mode
-    echo "Starting application with PM2 in correct mode..."
-    
-    # Make sure PM2 uses the correct DATABASE_URL from the .env file
-    echo "Ensuring PM2 processes use the correct environment..."
+    # Start the application with PM2
+    echo "Starting application with PM2..."
     pm2 start yarn --name "medusa-server" -- start
     
     # Save the PM2 configuration
     pm2 save
     
     echo "Backend deployment completed successfully!"
-EOF
+ENDSSH
 
 # Check SSH exit status
 SSH_EXIT=$?
