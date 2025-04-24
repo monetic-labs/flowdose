@@ -138,6 +138,25 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
         cp /tmp/backend.env /var/www/flowdose/backend/.env.${ENV}
         ln -sf /var/www/flowdose/backend/.env.${ENV} /var/www/flowdose/backend/.env
         echo "Environment file updated."
+        
+        # Verify database connection settings in the environment file
+        echo "Checking database connection settings..."
+        if grep -q "DATABASE_URL=" /var/www/flowdose/backend/.env; then
+            echo "DATABASE_URL found in environment file."
+            # Extract host from DATABASE_URL to check if it's not trying to use localhost
+            DB_HOST=$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
+            if [[ "$DB_HOST" == "::1" || "$DB_HOST" == "localhost" || "$DB_HOST" == "127.0.0.1" ]]; then
+                echo "ERROR: Database host is set to local ($DB_HOST). It should be set to a remote DigitalOcean database."
+                echo "Expected format: postgresql://doadmin:PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+                exit 1
+            else
+                echo "Database host setting looks correct: $DB_HOST"
+            fi
+        else
+            echo "ERROR: DATABASE_URL not found in environment file. Please add it with the correct DigitalOcean database connection string."
+            echo "Expected format: postgresql://doadmin:PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+            exit 1
+        fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
     fi
