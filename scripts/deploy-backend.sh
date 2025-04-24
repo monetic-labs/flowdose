@@ -139,8 +139,20 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     mkdir -p /root/app
     
     # Clone only the backend directory
-    echo "Attempting to clone backend directory..."
-    cd /root/app
+    echo "=== SERVER IDENTIFICATION DETAILS ==="
+    echo "Hostname: $(hostname)"
+    echo "IP Addresses: $(hostname -I || echo 'hostname -I command not available')"
+    echo "Current directory: $(pwd)"
+    echo "OS Information: $(cat /etc/os-release | grep "PRETTY_NAME" || echo 'OS info not available')"
+    echo "Kernel version: $(uname -a)"
+    echo "Current user: $(whoami)"
+    echo "User home directory: $HOME"
+    echo "Memory: $(free -h | head -2 || echo 'free command not available')"
+    echo "Disk space: $(df -h / | tail -1 || echo 'df command not available')"
+    echo "Process tree: $(ps axjf | head -10 || echo 'ps command not available')"
+    echo "SSH session details: $SSH_CLIENT $SSH_TTY"
+    echo "Parent process: $(ps -o cmd= -p $PPID || echo 'ps command not available')"
+    echo "=====================================
 
     # Add extensive debugging
     echo "DEBUG: Current directory: $(pwd)"
@@ -148,11 +160,33 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "DEBUG: Directory contents before clone:"
     ls -la
 
+    # Use absolute paths for everything
+    TEMP_REPO_DIR="/root/app/temp-repo"
+    BACKEND_DIR="/root/app/backend"
+
+    # Create temp directory with explicit permissions
+    echo "Creating temp directory with explicit permissions"
+    mkdir -p $TEMP_REPO_DIR
+    chmod 777 $TEMP_REPO_DIR
+    echo "DEBUG: Temp directory created: $(ls -ld $TEMP_REPO_DIR)"
+
     # Simple direct clone approach with full output
-    echo "Cloning repository..."
+    echo "Cloning repository with absolute paths..."
     # Use -v for verbose output to see exactly what git is doing
-    if git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git /root/app/temp-repo; then
+    if git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git $TEMP_REPO_DIR; then
         echo "Clone operation reported success."
+        echo "DEBUG: Checking if clone directory actually exists:"
+        if [ -d "$TEMP_REPO_DIR" ]; then
+            echo "DEBUG: Temp repo directory exists at $TEMP_REPO_DIR"
+            echo "DEBUG: Files in temp repo:"
+            find $TEMP_REPO_DIR -type f -name "*.json" | head -5
+        else
+            echo "ERROR: Temp repo directory does not exist at $TEMP_REPO_DIR despite successful clone!"
+            # Try cloning directly to final location as fallback
+            echo "FALLBACK: Trying to clone directly to backend directory"
+            git clone -v --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git $BACKEND_DIR
+            exit 1
+        fi
     else
         echo "ERROR: Git clone operation failed with exit code $?"
         exit 1
