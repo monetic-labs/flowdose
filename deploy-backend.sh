@@ -47,8 +47,10 @@ if [ "$CI_MODE" = true ]; then
     echo "  - Enable Corepack for Yarn 4"
     echo "  - Install dependencies"
     echo "  - Build the application"
+    echo "  - Copy environment to build directory"
+    echo "  - Install dependencies in build directory"
     echo "  - Run database migrations"
-    echo "  - Start the application with PM2"
+    echo "  - Start the application with PM2 from the build directory"
     
     echo "Backend deployment simulation completed successfully!"
 else
@@ -84,6 +86,7 @@ else
         
         # Stop any running PM2 processes
         pm2 stop all || true
+        pm2 delete all || true
         
         # Navigate to backend directory
         cd /root/app/backend
@@ -107,21 +110,37 @@ else
         corepack enable
         corepack prepare yarn@4.4.0 --activate
         
-        # Install dependencies
+        # Install dependencies in source directory
+        echo "Installing dependencies in source directory..."
         yarn install
         
         # Build the application
+        echo "Building the application..."
         yarn build
         
-        # Run database migrations
-        yarn medusa migrations run
+        # Copy environment to the build directory
+        echo "Copying environment file to build directory..."
+        cp /root/app/backend/.env /root/app/backend/.medusa/server/.env.production
         
-        # Start the application with PM2 in correct mode
-        pm2 start yarn --name "medusa-server" -- start:server
-        pm2 start yarn --name "medusa-worker" -- start:worker
+        # Install dependencies in the build directory
+        echo "Installing dependencies in build directory..."
+        cd /root/app/backend/.medusa/server
+        yarn install
+        
+        # Run database migrations
+        echo "Running database migrations..."
+        NODE_ENV=production yarn medusa migrations run
+        
+        # Start the application with PM2 from the build directory
+        echo "Starting application with PM2 from build directory..."
+        NODE_ENV=production pm2 start --name "medusa-server" yarn -- start
+        NODE_ENV=production pm2 start --name "medusa-worker" yarn -- start --worker
         
         # Save the PM2 configuration
         pm2 save
+        
+        # Return to root directory
+        cd /root/app/backend
         
         echo "Backend deployment completed successfully!"
 ENDSSH
