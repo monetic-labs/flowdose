@@ -28,6 +28,7 @@ jobs:
       NODE_ENV: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
       GITHUB_ACTIONS: "true"
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
     
     steps:
       - name: Checkout code
@@ -61,6 +62,7 @@ jobs:
           # This prevents empty values in the generated .env file
           echo "Checking for required secrets..."
           DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
+          # For Redis, use the secure URL with auth
           REDIS="${{ secrets.BACKEND_REDIS_URL }}"
           JWT="${{ secrets.BACKEND_JWT_SECRET }}"
           COOKIE="${{ secrets.BACKEND_COOKIE_SECRET }}"
@@ -73,7 +75,7 @@ jobs:
           
           # Set defaults for any missing values
           DB_URL=${DB_URL:-"postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca"}
-          REDIS=${REDIS:-"redis://redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"}
+          REDIS=${REDIS:-"rediss://default:${REDIS_PASSWORD}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"}
           JWT=${JWT:-"$(openssl rand -hex 32)"}
           COOKIE=${COOKIE:-"$(openssl rand -hex 32)"}
           ADMIN_CORS=${ADMIN_CORS:-"https://admin-${ENV_NAME}.flowdose.xyz"}
