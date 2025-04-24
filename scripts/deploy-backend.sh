@@ -116,20 +116,20 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Checking DB_PASSWORD: \$(if [ -n "\$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
     
     # Check if directory exists, if not clone the repository
-    if [ ! -d "/var/www/flowdose/backend" ]; then
+    if [ ! -d "/root/app/backend" ]; then
         echo "Backend directory doesn't exist, creating..."
-        mkdir -p /var/www/flowdose
+        mkdir -p /root/app
         # Clone only the backend directory using sparse checkout
         echo "Cloning repository..."
-        git clone --no-checkout https://github.com/monetic-labs/flowdose.git /var/www/flowdose/repo-temp
-        cd /var/www/flowdose/repo-temp
+        git clone --no-checkout https://github.com/monetic-labs/flowdose.git /root/app/repo-temp
+        cd /root/app/repo-temp
         echo "Setting up sparse checkout..."
         git sparse-checkout init --cone
         git sparse-checkout set backend
         git checkout
         echo "Moving backend directory..."
-        mv backend /var/www/flowdose/
-        cd /var/www/flowdose
+        mv backend /root/app/
+        cd /root/app
         echo "Cleaning up temporary repository..."
         rm -rf repo-temp
     fi
@@ -140,7 +140,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     
     # Navigate to backend directory
     echo "Changing to backend directory..."
-    cd /var/www/flowdose/backend
+    cd /root/app/backend
     echo "Now in: \$(pwd)"
     
     # Pull latest code
@@ -153,38 +153,38 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     
     # Download DigitalOcean CA certificate
     echo "Downloading DigitalOcean CA certificate..."
-    mkdir -p /var/www/flowdose/certs
+    mkdir -p /root/app/certs
     # Try different potential certificate sources
-    if wget -q https://truststore.pki.digitalocean.com/global/global-bundle.pem -O /var/www/flowdose/certs/do-postgres.pem; then
+    if wget -q https://truststore.pki.digitalocean.com/global/global-bundle.pem -O /root/app/certs/do-postgres.pem; then
         echo "Downloaded DigitalOcean CA certificate from truststore.pki.digitalocean.com"
-    elif wget -q https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem -O /var/www/flowdose/certs/do-postgres.pem; then
+    elif wget -q https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem -O /root/app/certs/do-postgres.pem; then
         echo "Downloaded DigiCert Global Root CA certificate"
     else
         echo "Failed to download CA certificates. Creating an empty file as fallback."
-        touch /var/www/flowdose/certs/do-postgres.pem
+        touch /root/app/certs/do-postgres.pem
     fi
-    chmod 644 /var/www/flowdose/certs/do-postgres.pem
+    chmod 644 /root/app/certs/do-postgres.pem
     
     # Copy over the environment file (this would be uploaded in a separate step)
     if [ -f "/tmp/backend.env" ]; then
         echo "Updating environment file..."
-        cp /tmp/backend.env /var/www/flowdose/backend/.env.\${ENV}
-        ln -sf /var/www/flowdose/backend/.env.\${ENV} /var/www/flowdose/backend/.env
+        cp /tmp/backend.env /root/app/backend/.env.\${ENV}
+        ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
         echo "Environment file updated."
         
         # Verify database connection settings in the environment file
         echo "Checking database connection settings..."
-        if grep -q "DATABASE_URL=" /var/www/flowdose/backend/.env; then
+        if grep -q "DATABASE_URL=" /root/app/backend/.env; then
             echo "DATABASE_URL found in environment file."
             # Extract host from DATABASE_URL to check if it's not trying to use localhost
-            DB_HOST=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
+            DB_HOST=\$(grep "DATABASE_URL=" /root/app/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
             if [[ "\$DB_HOST" == "::1" || "\$DB_HOST" == "localhost" || "\$DB_HOST" == "127.0.0.1" ]]; then
                 echo "WARNING: Database host is set to local (\$DB_HOST). It should be set to a remote DigitalOcean database."
                 echo "Will override with correct database connection."
                 
                 # Set the correct database connection for DigitalOcean PostgreSQL with CA certificate
                 echo "Setting correct database connection for DigitalOcean PostgreSQL..."
-                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/var/www/flowdose/certs/do-postgres.pem|g" /var/www/flowdose/backend/.env
+                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem|g" /root/app/backend/.env
             else
                 echo "Database host setting looks correct: \$DB_HOST"
             fi
@@ -192,13 +192,13 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
             echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
             # Add the correct DATABASE_URL to the .env file
             echo "Adding correct DATABASE_URL to .env file..."
-            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/var/www/flowdose/certs/do-postgres.pem" >> /var/www/flowdose/backend/.env
+            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" >> /root/app/backend/.env
         fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
         # Create a minimal .env file with the DATABASE_URL
         echo "Creating minimal .env file with DATABASE_URL..."
-        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/var/www/flowdose/certs/do-postgres.pem" > /var/www/flowdose/backend/.env
+        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" > /root/app/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -226,7 +226,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     fi
     
     # Log the DATABASE_URL (mask password)
-    CURRENT_DB_URL=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | cut -d'=' -f2-)
+    CURRENT_DB_URL=\$(grep "DATABASE_URL=" /root/app/backend/.env | cut -d'=' -f2-)
     MASKED_URL=\$(echo \$CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
     echo "Using DATABASE_URL: \$MASKED_URL"
     
@@ -239,7 +239,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
         
         # Try different sslmode options if the first attempt fails
         echo "Trying with sslmode=prefer..."
-        sed -i 's|sslmode=verify-ca|sslmode=prefer|g' /var/www/flowdose/backend/.env
+        sed -i 's|sslmode=verify-ca|sslmode=prefer|g' /root/app/backend/.env
         if ! yarn medusa db:migrate; then
             echo "Migration with sslmode=prefer failed, trying with process.env.NODE_TLS_REJECT_UNAUTHORIZED=0..."
             
