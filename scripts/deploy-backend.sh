@@ -138,23 +138,45 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     # Create parent directory if it doesn't exist
     mkdir -p /root/app
     
-    # Clone a fresh copy of the repository
-    echo "Cloning fresh copy of the repository..."
+    # Clone only the backend directory using sparse checkout
+    echo "Cloning only the backend directory..."
     cd /root/app
-    echo "Cloning from: https://github.com/monetic-labs/flowdose.git -b \$BRANCH"
-    git clone --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git /root/app/backend
-    
-    # If clone was unsuccessful, restore from backup
-    if [ ! -d "/root/app/backend" ]; then
-        echo "Clone failed, restoring backup..."
-        # If the clone failed, restore from backup
-        if [ -d "/root/app/backend.old" ]; then
-            mv /root/app/backend.old /root/app/backend
-        else
-            echo "ERROR: No backup available and clone failed. Deployment aborted."
-            exit 1
-        fi
+
+    # Create a temporary directory for the clone
+    echo "Creating temporary clone..."
+    mkdir -p /root/app/temp-repo
+
+    # Clone without checking out any files initially
+    git clone --no-checkout https://github.com/monetic-labs/flowdose.git /root/app/temp-repo
+
+    # Setup sparse checkout for just the backend directory
+    cd /root/app/temp-repo
+    git sparse-checkout init --cone
+    git sparse-checkout set backend
+
+    # Checkout the specific branch
+    echo "Checking out branch: \$BRANCH"
+    git checkout \$BRANCH
+
+    # Verify the backend directory exists
+    if [ ! -d "/root/app/temp-repo/backend" ]; then
+        echo "ERROR: Backend directory not found after sparse checkout. Deployment aborted."
+        exit 1
     fi
+
+    # Remove existing backend directory if it exists
+    if [ -d "/root/app/backend" ]; then
+        echo "Removing existing backend directory..."
+        rm -rf /root/app/backend
+    fi
+
+    # Move the backend directory to the final location
+    echo "Moving backend directory to deployment location..."
+    mv /root/app/temp-repo/backend /root/app/
+
+    # Clean up the temporary repo
+    echo "Cleaning up temporary repository..."
+    rm -rf /root/app/temp-repo
     
     # Stop any running PM2 processes
     echo "Stopping PM2 processes..."
