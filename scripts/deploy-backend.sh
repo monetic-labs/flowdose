@@ -202,11 +202,28 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
     # Create minimal environment file if not found
     echo "Setting up environment file..."
     if [ ! -f "/tmp/backend.env" ]; then
+        echo "Warning: No environment file found at /tmp/backend.env"
         echo "Creating minimal .env file with DATABASE_URL..."
         echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" > /root/app/backend/.env
     else
+        echo "Found environment file at /tmp/backend.env, copying to application directory"
         cp /tmp/backend.env /root/app/backend/.env
+        
+        # Ensure the DATABASE_URL is set correctly with the password from CI
+        if grep -q "DATABASE_URL=" /root/app/backend/.env; then
+            echo "Updating DATABASE_URL with correct password from deployment environment"
+            sed -i "s|postgresql://doadmin:[^@]*@|postgresql://doadmin:${DB_PASSWORD}@|g" /root/app/backend/.env
+        else
+            echo "Adding DATABASE_URL to .env file"
+            echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca&sslrootcert=/root/app/certs/do-postgres.pem" >> /root/app/backend/.env
+        fi
     fi
+    
+    # Display the final environment file (with password masked)
+    echo "Environment file contents (passwords masked):"
+    grep -v "PASSWORD\|SECRET\|KEY" /root/app/backend/.env || echo "No environment file found"
+    echo "Database URL (password masked):"
+    grep "DATABASE_URL" /root/app/backend/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g' || echo "No DATABASE_URL found"
     
     # Enable Corepack for Yarn 4
     echo "Enabling Corepack for Yarn 4..."
