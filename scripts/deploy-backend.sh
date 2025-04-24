@@ -115,23 +115,37 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Current directory: \$(pwd)"
     echo "Checking DB_PASSWORD: \$(if [ -n "\$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
     
-    # Check if directory exists, if not clone the repository
-    if [ ! -d "/root/app/backend" ]; then
-        echo "Backend directory doesn't exist, creating..."
-        mkdir -p /root/app
-        # Clone only the backend directory using sparse checkout
-        echo "Cloning repository..."
-        git clone --no-checkout https://github.com/monetic-labs/flowdose.git /root/app/repo-temp
-        cd /root/app/repo-temp
-        echo "Setting up sparse checkout..."
-        git sparse-checkout init --cone
-        git sparse-checkout set backend
-        git checkout
-        echo "Moving backend directory..."
-        mv backend /root/app/
-        cd /root/app
-        echo "Cleaning up temporary repository..."
-        rm -rf repo-temp
+    # First, remove any old backup directory
+    echo "Removing old backup directory if it exists..."
+    rm -rf /root/app/backend.old
+    
+    # Then backup the current directory if it exists
+    if [ -d "/root/app/backend" ]; then
+        echo "Backing up existing backend directory..."
+        mv /root/app/backend /root/app/backend.old
+    fi
+    
+    # Create parent directory if it doesn't exist
+    mkdir -p /root/app
+    
+    # Clone a fresh copy of the repository
+    echo "Cloning fresh copy of the repository..."
+    BRANCH=$([ "$ENV" == "production" ] && echo "main" || echo "staging")
+    git clone --depth 1 -b $BRANCH https://github.com/monetic-labs/flowdose.git /root/app/backend-temp
+    
+    # If clone was successful, move the backend directory to its final location
+    if [ -d "/root/app/backend-temp" ]; then
+        echo "Clone successful, setting up backend directory..."
+        mv /root/app/backend-temp /root/app/backend
+    else
+        echo "Clone failed, restoring backup..."
+        # If the clone failed, restore from backup
+        if [ -d "/root/app/backend.old" ]; then
+            mv /root/app/backend.old /root/app/backend
+        else
+            echo "ERROR: No backup available and clone failed. Deployment aborted."
+            exit 1
+        fi
     fi
     
     # Stop any running PM2 processes
