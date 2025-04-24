@@ -157,7 +157,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
     
     # Run database migrations
     echo "Running database migrations..."
-    yarn medusa migrations run
+    yarn medusa db:migrate
     
     # Start the application with PM2 in correct mode
     echo "Starting application with PM2..."
