@@ -96,17 +96,18 @@ fi
 
 # Common deployment code for both CI and non-CI
 echo "Starting SSH deployment to $SSH_USER@$IP_ADDRESS..."
+
+# Create a secure way to pass the DB_PASSWORD
+# The following approach passes the password directly without relying on SSH environment passing
+ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
+    # Set DB_PASSWORD in the remote shell
+    DB_PASSWORD='${DB_PASSWORD}'
     
-# SSH to the backend server and perform deployment
-# Export DB_PASSWORD variable so SSH can use it
-export DB_PASSWORD
-# Use -o SendEnv to pass the DB_PASSWORD environment variable to the remote server
-ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << "ENDSSH"
     set -e  # Exit immediately if a command fails
     
     echo "Connected to server, starting deployment..."
-    echo "Current directory: $(pwd)"
-    echo "Checking DB_PASSWORD: $(if [ -n "$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
+    echo "Current directory: \$(pwd)"
+    echo "Checking DB_PASSWORD: \$(if [ -n "\$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
     
     # Check if directory exists, if not clone the repository
     if [ ! -d "/var/www/flowdose/backend" ]; then
@@ -134,7 +135,7 @@ ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << 
     # Navigate to backend directory
     echo "Changing to backend directory..."
     cd /var/www/flowdose/backend
-    echo "Now in: $(pwd)"
+    echo "Now in: \$(pwd)"
     
     # Pull latest code
     if [ -d ".git" ]; then
@@ -147,8 +148,8 @@ ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << 
     # Copy over the environment file (this would be uploaded in a separate step)
     if [ -f "/tmp/backend.env" ]; then
         echo "Updating environment file..."
-        cp /tmp/backend.env /var/www/flowdose/backend/.env.${ENV}
-        ln -sf /var/www/flowdose/backend/.env.${ENV} /var/www/flowdose/backend/.env
+        cp /tmp/backend.env /var/www/flowdose/backend/.env.\${ENV}
+        ln -sf /var/www/flowdose/backend/.env.\${ENV} /var/www/flowdose/backend/.env
         echo "Environment file updated."
         
         # Verify database connection settings in the environment file
@@ -156,28 +157,28 @@ ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << 
         if grep -q "DATABASE_URL=" /var/www/flowdose/backend/.env; then
             echo "DATABASE_URL found in environment file."
             # Extract host from DATABASE_URL to check if it's not trying to use localhost
-            DB_HOST=$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
-            if [[ "$DB_HOST" == "::1" || "$DB_HOST" == "localhost" || "$DB_HOST" == "127.0.0.1" ]]; then
-                echo "WARNING: Database host is set to local ($DB_HOST). It should be set to a remote DigitalOcean database."
+            DB_HOST=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
+            if [[ "\$DB_HOST" == "::1" || "\$DB_HOST" == "localhost" || "\$DB_HOST" == "127.0.0.1" ]]; then
+                echo "WARNING: Database host is set to local (\$DB_HOST). It should be set to a remote DigitalOcean database."
                 echo "Will override with correct database connection."
                 
                 # Set the correct database connection for DigitalOcean PostgreSQL
                 echo "Setting correct database connection for DigitalOcean PostgreSQL..."
-                sed -i 's|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require|g' /var/www/flowdose/backend/.env
+                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require|g" /var/www/flowdose/backend/.env
             else
-                echo "Database host setting looks correct: $DB_HOST"
+                echo "Database host setting looks correct: \$DB_HOST"
             fi
         else
             echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
             # Add the correct DATABASE_URL to the .env file
             echo "Adding correct DATABASE_URL to .env file..."
-            echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" >> /var/www/flowdose/backend/.env
+            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" >> /var/www/flowdose/backend/.env
         fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
         # Create a minimal .env file with the DATABASE_URL
         echo "Creating minimal .env file with DATABASE_URL..."
-        echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" > /var/www/flowdose/backend/.env
+        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" > /var/www/flowdose/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -198,16 +199,16 @@ ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << 
     
     # Make sure we have the password from a secure location (GitHub Secret or environment variable)
     # This should be set in the GitHub workflow that calls this script
-    if [ -z "${DB_PASSWORD}" ]; then
+    if [ -z "\${DB_PASSWORD}" ]; then
         echo "ERROR: DB_PASSWORD environment variable is not set. Cannot connect to database."
         echo "Please ensure this is set in the GitHub workflow or server environment."
         exit 1
     fi
     
     # Log the DATABASE_URL (mask password)
-    CURRENT_DB_URL=$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | cut -d'=' -f2-)
-    MASKED_URL=$(echo $CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
-    echo "Using DATABASE_URL: $MASKED_URL"
+    CURRENT_DB_URL=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | cut -d'=' -f2-)
+    MASKED_URL=\$(echo \$CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
+    echo "Using DATABASE_URL: \$MASKED_URL"
     
     # Run database migrations with explicit environment variable from the .env file
     echo "Running database migrations..."
@@ -225,7 +226,7 @@ ssh -o StrictHostKeyChecking=no -o SendEnv=DB_PASSWORD $SSH_USER@$IP_ADDRESS << 
     pm2 save
     
     echo "Backend deployment completed successfully!"
-ENDSSH
+EOF
 
 # Check SSH exit status
 SSH_EXIT=$?
