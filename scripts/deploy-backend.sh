@@ -103,17 +103,27 @@ fi
 # Common deployment code for both CI and non-CI
 echo "Starting SSH deployment to $SSH_USER@$IP_ADDRESS..."
 
+# Determine branch based on environment
+BRANCH=$([ "$ENV" == "production" ] && echo "main" || echo "staging")
+echo "Will deploy from branch: $BRANCH"
+
 # Create a secure way to pass the DB_PASSWORD
 # The following approach passes the password directly without relying on SSH environment passing
 ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     # Set DB_PASSWORD in the remote shell
     DB_PASSWORD='${DB_PASSWORD}'
+    # Set ENV in the remote shell
+    ENV='${ENV}'
+    # Set BRANCH in the remote shell
+    BRANCH='${BRANCH}'
     
     set -e  # Exit immediately if a command fails
     
     echo "Connected to server, starting deployment..."
     echo "Current directory: \$(pwd)"
     echo "Checking DB_PASSWORD: \$(if [ -n "\$DB_PASSWORD" ]; then echo "set"; else echo "not set"; fi)"
+    echo "Environment: \$ENV"
+    echo "Branch: \$BRANCH"
     
     # First, remove any old backup directory
     echo "Removing old backup directory if it exists..."
@@ -130,14 +140,12 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     
     # Clone a fresh copy of the repository
     echo "Cloning fresh copy of the repository..."
-    BRANCH=$([ "$ENV" == "production" ] && echo "main" || echo "staging")
-    git clone --depth 1 -b $BRANCH https://github.com/monetic-labs/flowdose.git /root/app/backend-temp
+    cd /root/app
+    echo "Cloning from: https://github.com/monetic-labs/flowdose.git -b \$BRANCH"
+    git clone --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git /root/app/backend
     
-    # If clone was successful, move the backend directory to its final location
-    if [ -d "/root/app/backend-temp" ]; then
-        echo "Clone successful, setting up backend directory..."
-        mv /root/app/backend-temp /root/app/backend
-    else
+    # If clone was unsuccessful, restore from backup
+    if [ ! -d "/root/app/backend" ]; then
         echo "Clone failed, restoring backup..."
         # If the clone failed, restore from backup
         if [ -d "/root/app/backend.old" ]; then
@@ -156,14 +164,6 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     echo "Changing to backend directory..."
     cd /root/app/backend
     echo "Now in: \$(pwd)"
-    
-    # Pull latest code
-    if [ -d ".git" ]; then
-        echo "Pulling latest code..."
-        git pull
-    else
-        echo "Warning: Not a git repository. Cannot pull latest changes."
-    fi
     
     # Download DigitalOcean CA certificate
     echo "Downloading DigitalOcean CA certificate..."
