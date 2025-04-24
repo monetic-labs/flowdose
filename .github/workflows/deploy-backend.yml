@@ -62,25 +62,35 @@ jobs:
           echo "Checking for required secrets..."
           DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
           REDIS="${{ secrets.BACKEND_REDIS_URL }}"
-          JWT="${{ secrets.JWT_SECRET }}"
-          COOKIE="${{ secrets.COOKIE_SECRET }}"
+          JWT="${{ secrets.BACKEND_JWT_SECRET }}"
+          COOKIE="${{ secrets.BACKEND_COOKIE_SECRET }}"
           ADMIN_CORS="${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}"
           STORE_CORS="${{ secrets.BACKEND_MEDUSA_STORE_CORS }}"
           BACKEND_URL="${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}"
+          
+          # Set environment variables for use in the template
+          ENV_NAME="${{ env.NODE_ENV }}"
           
           # Set defaults for any missing values
           DB_URL=${DB_URL:-"postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca"}
           REDIS=${REDIS:-"redis://redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"}
           JWT=${JWT:-"$(openssl rand -hex 32)"}
           COOKIE=${COOKIE:-"$(openssl rand -hex 32)"}
-          ADMIN_CORS=${ADMIN_CORS:-"https://admin-${{ env.NODE_ENV }}.flowdose.xyz"}
-          STORE_CORS=${STORE_CORS:-"https://${{ env.NODE_ENV }}.flowdose.xyz"}
-          BACKEND_URL=${BACKEND_URL:-"https://api-${{ env.NODE_ENV }}.flowdose.xyz"}
+          ADMIN_CORS=${ADMIN_CORS:-"https://admin-${ENV_NAME}.flowdose.xyz"}
+          STORE_CORS=${STORE_CORS:-"https://${ENV_NAME}.flowdose.xyz"}
+          BACKEND_URL=${BACKEND_URL:-"https://api-${ENV_NAME}.flowdose.xyz"}
+          
+          # Define store URL based on environment
+          if [ "$ENV_NAME" = "production" ]; then
+            STORE_URL="https://flowdose.xyz"
+          else
+            STORE_URL="https://${ENV_NAME}.flowdose.xyz"
+          fi
           
           # Create the environment file with validated values
-          cat > backend/.env.${{ env.NODE_ENV }} << EOL
+          cat > backend/.env.${ENV_NAME} << EOL
           # Core Settings
-          NODE_ENV=${{ env.NODE_ENV }}
+          NODE_ENV=${ENV_NAME}
           PORT=9000
           
           # Database
@@ -110,16 +120,16 @@ jobs:
           ENABLE_PUBLISHABLE_API_KEY=true
           
           # Storefront URL
-          STORE_URL=https://${{ env.NODE_ENV == 'production' && '' || '${{ env.NODE_ENV }}.' }}flowdose.xyz
+          STORE_URL=${STORE_URL}
           EOL
           
           # Display the generated environment file (with sensitive data masked)
           echo "Generated environment file (sensitive values masked):"
-          cat backend/.env.${{ env.NODE_ENV }} | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
+          cat backend/.env.${ENV_NAME} | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
           
           # Copy to temp location for deployment
           mkdir -p /tmp
-          cp backend/.env.${{ env.NODE_ENV }} /tmp/backend.env
+          cp backend/.env.${ENV_NAME} /tmp/backend.env
       
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.8.0
