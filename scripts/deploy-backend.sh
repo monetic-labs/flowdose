@@ -164,7 +164,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
                 
                 # Set the correct database connection for DigitalOcean PostgreSQL
                 echo "Setting correct database connection for DigitalOcean PostgreSQL..."
-                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require|g" /var/www/flowdose/backend/.env
+                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=prefer|g" /var/www/flowdose/backend/.env
             else
                 echo "Database host setting looks correct: \$DB_HOST"
             fi
@@ -172,13 +172,13 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
             echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
             # Add the correct DATABASE_URL to the .env file
             echo "Adding correct DATABASE_URL to .env file..."
-            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" >> /var/www/flowdose/backend/.env
+            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=prefer" >> /var/www/flowdose/backend/.env
         fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
         # Create a minimal .env file with the DATABASE_URL
         echo "Creating minimal .env file with DATABASE_URL..."
-        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" > /var/www/flowdose/backend/.env
+        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=prefer" > /var/www/flowdose/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -212,7 +212,21 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     
     # Run database migrations with explicit environment variable from the .env file
     echo "Running database migrations..."
-    yarn medusa db:migrate
+    if yarn medusa db:migrate; then
+        echo "Database migration successful!"
+    else
+        echo "Migration failed with sslmode=prefer, trying with sslmode=disable..."
+        # Replace sslmode in the DATABASE_URL
+        sed -i 's|sslmode=prefer|sslmode=disable|g' /var/www/flowdose/backend/.env
+        
+        # Log the new DATABASE_URL (mask password)
+        CURRENT_DB_URL=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | cut -d'=' -f2-)
+        MASKED_URL=\$(echo \$CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
+        echo "Trying with new DATABASE_URL: \$MASKED_URL"
+        
+        # Try migration again
+        yarn medusa db:migrate
+    fi
     
     # Start the application with PM2 in correct mode
     echo "Starting application with PM2..."
