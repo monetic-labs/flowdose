@@ -146,19 +146,29 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
             # Extract host from DATABASE_URL to check if it's not trying to use localhost
             DB_HOST=$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | sed -E 's/.*\/\/([^:]+):([^@]+)@([^:]+).*/\3/')
             if [[ "$DB_HOST" == "::1" || "$DB_HOST" == "localhost" || "$DB_HOST" == "127.0.0.1" ]]; then
-                echo "ERROR: Database host is set to local ($DB_HOST). It should be set to a remote DigitalOcean database."
-                echo "Expected format: postgresql://doadmin:PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
-                exit 1
+                echo "WARNING: Database host is set to local ($DB_HOST). It should be set to the DigitalOcean database."
+                echo "Will override with correct database connection."
+                
+                # Set the correct database connection for DigitalOcean PostgreSQL
+                CORRECT_DB_URL="postgresql://doadmin:\${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+                echo "Setting correct database connection for DigitalOcean PostgreSQL..."
+                sed -i "s|DATABASE_URL=.*|DATABASE_URL=$CORRECT_DB_URL|g" /var/www/flowdose/backend/.env
             else
                 echo "Database host setting looks correct: $DB_HOST"
             fi
         else
-            echo "ERROR: DATABASE_URL not found in environment file. Please add it with the correct DigitalOcean database connection string."
-            echo "Expected format: postgresql://doadmin:PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
-            exit 1
+            echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
+            # Add the correct DATABASE_URL to the .env file
+            echo "Adding correct DATABASE_URL to .env file..."
+            CORRECT_DB_URL="postgresql://doadmin:\${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+            echo "DATABASE_URL=$CORRECT_DB_URL" >> /var/www/flowdose/backend/.env
         fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
+        # Create a minimal .env file with the DATABASE_URL
+        echo "Creating minimal .env file with DATABASE_URL..."
+        CORRECT_DB_URL="postgresql://doadmin:\${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+        echo "DATABASE_URL=$CORRECT_DB_URL" > /var/www/flowdose/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -173,6 +183,14 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
     # Build the application
     echo "Building application..."
     yarn build
+    
+    # Ensure database password is available
+    echo "Checking for database password..."
+    if [ -z "${DB_PASSWORD}" ]; then
+        echo "ERROR: DB_PASSWORD environment variable is not set. Cannot connect to database."
+        echo "Please ensure this is set in the GitHub workflow or server environment."
+        exit 1
+    fi
     
     # Run database migrations
     echo "Running database migrations..."
