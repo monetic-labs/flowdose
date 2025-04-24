@@ -81,6 +81,10 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_HOST_KEY }}" >> ~/.ssh/known_hosts
       
+      - name: Copy environment file to server
+        run: |
+          scp -o StrictHostKeyChecking=no /tmp/backend.env root@${{ secrets[format('BACKEND_{0}_IP', env.NODE_ENV == 'production' && 'PROD' || 'STAGING')] }}:/tmp/backend.env
+      
       - name: Deploy to ${{ env.NODE_ENV }}
         run: |
           chmod +x ./scripts/deploy-backend.sh
