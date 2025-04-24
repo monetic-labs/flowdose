@@ -63,7 +63,7 @@ if [ "$CI_MODE" = true ]; then
     echo "Deploying to $ENV environment in CI mode..."
     echo "CI mode: Would SSH to the server and run the following commands:"
     echo "  - Stop PM2 processes"
-    echo "  - Navigate to /var/www/flowdose/backend"
+    echo "  - Navigate to /root/app/backend"
     echo "  - Pull latest code from the backend directory"
     echo "  - Enable Corepack for Yarn 4"
     echo "  - Install dependencies"
