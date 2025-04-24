@@ -44,6 +44,7 @@ if [ "$CI_MODE" = true ]; then
     echo "  - Stop PM2 processes"
     echo "  - Navigate to /var/www/flowdose/backend"
     echo "  - Pull latest code from the backend directory"
+    echo "  - Enable Corepack for Yarn 4"
     echo "  - Install dependencies"
     echo "  - Build the application"
     echo "  - Run database migrations"
@@ -95,6 +96,11 @@ else
             ln -sf /var/www/flowdose/backend/.env.${ENV} /var/www/flowdose/backend/.env
             echo "Environment file updated."
         fi
+        
+        # Enable Corepack for Yarn 4
+        echo "Enabling Corepack for Yarn 4..."
+        corepack enable
+        corepack prepare yarn@4.4.0 --activate
         
         # Install dependencies
         yarn install
