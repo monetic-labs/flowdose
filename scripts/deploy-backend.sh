@@ -52,6 +52,12 @@ if [ -z "$DB_PASSWORD" ]; then
     exit 1
 fi
 
+# Export NODE_TLS_REJECT_UNAUTHORIZED=0 at the beginning of the script to disable SSL certificate verification
+export DB_PASSWORD
+# Disable SSL certificate verification at the Node.js level
+echo "Setting NODE_TLS_REJECT_UNAUTHORIZED=0 to bypass SSL certificate verification"
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+
 # In CI mode, just show what would happen
 if [ "$CI_MODE" = true ]; then
     echo "Deploying to $ENV environment in CI mode..."
@@ -164,7 +170,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
                 
                 # Set the correct database connection for DigitalOcean PostgreSQL
                 echo "Setting correct database connection for DigitalOcean PostgreSQL..."
-                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require&ssl=true&sslrootcert=null|g" /var/www/flowdose/backend/.env
+                sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require|g" /var/www/flowdose/backend/.env
             else
                 echo "Database host setting looks correct: \$DB_HOST"
             fi
@@ -172,13 +178,13 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
             echo "WARNING: DATABASE_URL not found in environment file. Will set it explicitly."
             # Add the correct DATABASE_URL to the .env file
             echo "Adding correct DATABASE_URL to .env file..."
-            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require&ssl=true&sslrootcert=null" >> /var/www/flowdose/backend/.env
+            echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" >> /var/www/flowdose/backend/.env
         fi
     else
         echo "Warning: No environment file found at /tmp/backend.env"
         # Create a minimal .env file with the DATABASE_URL
         echo "Creating minimal .env file with DATABASE_URL..."
-        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require&ssl=true&sslrootcert=null" > /var/www/flowdose/backend/.env
+        echo "DATABASE_URL=postgresql://doadmin:\$DB_PASSWORD@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" > /var/www/flowdose/backend/.env
     fi
     
     # Enable Corepack for Yarn 4
@@ -215,13 +221,14 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
     if yarn medusa db:migrate; then
         echo "Database migration successful!"
     else
-        echo "Migration failed with first SSL approach, trying with Node.js environment variable..."
+        echo "Migration failed on first attempt, retrying once more..."
         
-        # Use Node.js environment variable to bypass SSL certificate validation
-        echo "Setting NODE_TLS_REJECT_UNAUTHORIZED=0 to bypass SSL certificate verification"
-        export NODE_TLS_REJECT_UNAUTHORIZED=0
+        # Log the DATABASE_URL again (mask password)
+        CURRENT_DB_URL=\$(grep "DATABASE_URL=" /var/www/flowdose/backend/.env | cut -d'=' -f2-)
+        MASKED_URL=\$(echo \$CURRENT_DB_URL | sed 's/:[^:]*@/:*****@/')
+        echo "Using DATABASE_URL: \$MASKED_URL"
         
-        # Try migration again with SSL verification disabled at Node.js level
+        # Try migration again
         yarn medusa db:migrate
     fi
     
