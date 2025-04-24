@@ -188,3 +188,9 @@ variable "force_deploy_storefront" {
   type        = bool
   default     = false
 }
+
+variable "enable_ssl" {
+  description = "Whether to enable SSL certificate provisioning (can be disabled for troubleshooting)"
+  type        = bool
+  default     = true
+}

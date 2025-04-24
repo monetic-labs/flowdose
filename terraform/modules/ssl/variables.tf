@@ -31,4 +31,10 @@ variable "admin_email" {
 variable "ssh_private_key_path" {
   description = "Path to SSH private key for server access"
   type        = string
+}
+
+variable "enable_ssl" {
+  description = "Whether to enable SSL certificate provisioning"
+  type        = bool
+  default     = true
 } 

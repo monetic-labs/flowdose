@@ -126,21 +126,27 @@ module "dns" {
 module "ssl" {
   source = "./modules/ssl"
 
-  # Server IPs
-  backend_ip    = module.backend_droplet.ipv4_address
-  storefront_ip = module.storefront_droplet.ipv4_address
-
-  # Domain names
-  api_domain        = local.api_domain
-  admin_domain      = local.admin_domain
+  # Enable/disable SSL for troubleshooting
+  enable_ssl = var.enable_ssl
+  
+  # API and Admin panel SSL certificate
+  backend_ip      = module.backend_droplet.ipv4_address
+  api_domain      = local.api_domain
+  admin_domain    = local.admin_domain
+  
+  # Storefront SSL certificate
+  storefront_ip     = module.storefront_droplet.ipv4_address
   storefront_domain = local.storefront_domain
-
-  # Admin contact
+  
+  # Email for Let's Encrypt
   admin_email = var.admin_email
-
-  # SSH access
+  
+  # SSH Key for remote execution
   ssh_private_key_path = var.ssh_private_key_path
-
-  # Ensure this runs after DNS is configured
-  depends_on = [module.dns]
+  
+  depends_on = [
+    module.backend_droplet,
+    module.storefront_droplet,
+    module.dns
+  ]
 }

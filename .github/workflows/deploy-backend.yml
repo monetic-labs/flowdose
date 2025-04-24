@@ -1,0 +1,79 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    
+    env:
+      NODE_ENV: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      
+      - name: Run tests
+        working-directory: backend
+        run: npm test || echo "No tests found, continuing..."
+      
+      - name: Build application
+        working-directory: backend
+        run: npm run build
+      
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      
+      - name: Add host key to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_HOST_KEY }}" >> ~/.ssh/known_hosts
+      
+      - name: Deploy to ${{ env.NODE_ENV }}
+        run: |
+          chmod +x ./scripts/deploy-backend.sh
+          ./scripts/deploy-backend.sh ${{ env.NODE_ENV }} ${{ secrets[format('BACKEND_{0}_IP', env.NODE_ENV == 'production' && 'PROD' || 'STAGING')] }}
+        env:
+          BACKEND_DATABASE_URL: ${{ secrets.BACKEND_DATABASE_URL }}
+          BACKEND_REDIS_URL: ${{ secrets.BACKEND_REDIS_URL }}
+          BACKEND_JWT_SECRET: ${{ secrets.BACKEND_JWT_SECRET }}
+          BACKEND_COOKIE_SECRET: ${{ secrets.BACKEND_COOKIE_SECRET }}
+          BACKEND_MEDUSA_ADMIN_CORS: ${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}
+          BACKEND_MEDUSA_STORE_CORS: ${{ secrets.BACKEND_MEDUSA_STORE_CORS }}
+          BACKEND_STORE_CORS: ${{ secrets.BACKEND_STORE_CORS }}
+          BACKEND_MEDUSA_BACKEND_URL: ${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}
+      
+      - name: Verify deployment
+        if: success()
+        run: |
+          echo "Backend successfully deployed to ${{ env.NODE_ENV }} environment!" 

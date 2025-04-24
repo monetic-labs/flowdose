@@ -9,8 +9,8 @@ echo "Deploying FlowDose Backend in $ENV environment"
 echo "==================================================="
 
 # Validate environment
-if [[ ! "$ENV" =~ ^(staging|production)$ ]]; then
-    echo "Error: Invalid environment. Use 'staging' or 'production'"
+if [[ ! "$ENV" =~ ^(staging|production|test)$ ]]; then
+    echo "Error: Invalid environment. Use 'staging', 'production', or 'test'"
     exit 1
 fi
 
@@ -43,7 +43,7 @@ if [ "$CI_MODE" = true ]; then
     echo "CI mode: Would SSH to the server and run the following commands:"
     echo "  - Stop PM2 processes"
     echo "  - Navigate to /var/www/flowdose/backend"
-    echo "  - Pull latest code"
+    echo "  - Pull latest code from the backend directory"
     echo "  - Install dependencies"
     echo "  - Build the application"
     echo "  - Run database migrations"
@@ -53,8 +53,29 @@ if [ "$CI_MODE" = true ]; then
 else
     echo "Deploying to $SSH_USER@$IP_ADDRESS..."
     
+    # Check environment variables
+    echo "Validating environment variables..."
+    # This script will create a .env file from GitHub secrets in CI
+    # or validate existing .env file in manual deployment
+    ./scripts/validate-backend-env.sh $ENV
+    
     # SSH to the backend server and perform deployment
-    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'EOF'
+    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
+        # Check if directory exists, if not clone the repository
+        if [ ! -d "/var/www/flowdose/backend" ]; then
+            echo "Backend directory doesn't exist, creating..."
+            mkdir -p /var/www/flowdose
+            # Clone only the backend directory using sparse checkout
+            git clone --no-checkout https://github.com/yourusername/flowdose.git /var/www/flowdose/repo-temp
+            cd /var/www/flowdose/repo-temp
+            git sparse-checkout init --cone
+            git sparse-checkout set backend
+            git checkout
+            mv backend /var/www/flowdose/
+            cd /var/www/flowdose
+            rm -rf repo-temp
+        fi
+        
         # Stop any running PM2 processes
         pm2 stop all || true
         
@@ -62,7 +83,18 @@ else
         cd /var/www/flowdose/backend
         
         # Pull latest code
-        git pull
+        if [ -d ".git" ]; then
+            git pull
+        else
+            echo "Warning: Not a git repository. Cannot pull latest changes."
+        fi
+        
+        # Copy over the environment file (this would be uploaded in a separate step)
+        if [ -f "/tmp/backend.env" ]; then
+            cp /tmp/backend.env /var/www/flowdose/backend/.env.${ENV}
+            ln -sf /var/www/flowdose/backend/.env.${ENV} /var/www/flowdose/backend/.env
+            echo "Environment file updated."
+        fi
         
         # Install dependencies
         npm ci
@@ -73,17 +105,15 @@ else
         # Run database migrations
         npx medusa migrations run
         
-        # Seed the database if needed
-        # Uncomment if needed: npm run seed
-        
-        # Start the application with PM2
-        pm2 start npm --name "medusa" -- start
+        # Start the application with PM2 in correct mode
+        pm2 start npm --name "medusa-server" -- run start:server
+        pm2 start npm --name "medusa-worker" -- run start:worker
         
         # Save the PM2 configuration
         pm2 save
         
         echo "Backend deployment completed successfully!"
-EOF
+ENDSSH
 fi
 
 echo "Backend deployment script completed." 

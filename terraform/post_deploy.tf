@@ -141,4 +141,61 @@ module "deployment" {
   depends_on = [
     module.env_config_generation
   ]
+}
+
+module "post_setup" {
+  source = "./modules/post_setup"
+
+  backend_ip    = module.backend_droplet.ipv4_address
+  storefront_ip = module.storefront_droplet.ipv4_address
+  environment   = var.environment
+  ssh_private_key = file(var.ssh_private_key_path)
+
+  depends_on = [
+    module.backend_droplet,
+    module.storefront_droplet,
+    module.dns
+  ]
+}
+
+# Outputs for deployment scripts
+resource "local_file" "backend_deploy_config" {
+  content = templatefile("${path.module}/templates/backend-env.tpl", {
+    db_url     = module.postgres_db.connection_string
+    redis_url  = module.redis_db.connection_string
+    admin_cors = "https://admin-${var.environment}.flowdose.xyz"
+    store_cors = "https://${var.environment == "production" ? "flowdose.xyz" : "${var.environment}.flowdose.xyz"}"
+    api_url    = "https://api-${var.environment}.flowdose.xyz"
+    spaces_url = module.media_storage.endpoint
+    spaces_key = module.media_storage.access_key
+    spaces_secret = module.media_storage.secret_key
+    spaces_bucket = module.media_storage.bucket_name
+    spaces_region = var.spaces_region
+    jwt_secret    = var.jwt_secret
+    cookie_secret = var.cookie_secret
+  })
+  filename = "${path.module}/generated/backend-${var.environment}.env"
+}
+
+resource "local_file" "storefront_deploy_config" {
+  content = templatefile("${path.module}/templates/storefront-env.tpl", {
+    backend_url = "https://api-${var.environment}.flowdose.xyz"
+    base_url    = "https://${var.environment == "production" ? "flowdose.xyz" : "${var.environment}.flowdose.xyz"}"
+    revalidate_secret = var.revalidate_secret
+  })
+  filename = "${path.module}/generated/storefront-${var.environment}.env"
+}
+
+# Create script to upload environment files
+resource "local_file" "upload_env_script" {
+  content = templatefile("${path.module}/templates/upload-env.sh.tpl", {
+    backend_ip    = module.backend_droplet.ipv4_address
+    storefront_ip = module.storefront_droplet.ipv4_address
+    environment   = var.environment
+  })
+  filename = "${path.module}/generated/upload-env-${var.environment}.sh"
+
+  provisioner "local-exec" {
+    command = "chmod +x ${path.module}/generated/upload-env-${var.environment}.sh"
+  }
 } 

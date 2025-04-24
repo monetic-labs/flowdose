@@ -1,10 +1,11 @@
 # Disabled SSL module to prevent SSH connection attempts
 # We'll handle SSL certificates manually or through a separate process
 
+# Local variables to maintain outputs even when SSL is disabled
 locals {
   # Placeholders to avoid errors when this module is referenced
-  backend_ssl_id = "disabled-backend-ssl"
-  storefront_ssl_id = "disabled-storefront-ssl"
+  backend_ssl_id = var.enable_ssl ? (null_resource.backend_ssl[0].id) : "ssl-disabled-backend"
+  storefront_ssl_id = var.enable_ssl ? (null_resource.storefront_ssl[0].id) : "ssl-disabled-storefront"
 }
 
 # SSL Certificate Management for FlowDose
@@ -12,6 +13,8 @@ locals {
 
 # First, wait longer for DNS propagation before attempting to provision certificates
 resource "null_resource" "wait_for_dns_backend" {
+  count = var.enable_ssl ? 1 : 0
+  
   provisioner "local-exec" {
     command = "echo 'Waiting for DNS propagation (180 seconds)...' && sleep 180"
   }
@@ -19,6 +22,8 @@ resource "null_resource" "wait_for_dns_backend" {
 
 # Backend SSL Certificate Provisioning
 resource "null_resource" "backend_ssl" {
+  count = var.enable_ssl ? 1 : 0
+  
   # Trigger on IP changes or domain changes
   triggers = {
     backend_ip = var.backend_ip
@@ -83,6 +88,8 @@ resource "null_resource" "backend_ssl" {
 
 # Storefront SSL Certificate Provisioning
 resource "null_resource" "storefront_ssl" {
+  count = var.enable_ssl ? 1 : 0
+  
   # Trigger on IP changes or domain changes
   triggers = {
     storefront_ip = var.storefront_ip
@@ -145,12 +152,12 @@ resource "null_resource" "storefront_ssl" {
 
 # Add an automated renewal setup
 resource "null_resource" "setup_renewal" {
-  # Run this for both servers
-  count = 2
+  # Run this for both servers if SSL is enabled
+  count = var.enable_ssl ? 2 : 0
 
   # Only trigger when the SSL cert has been changed
   triggers = {
-    ssl_changes = count.index == 0 ? null_resource.backend_ssl.id : null_resource.storefront_ssl.id
+    ssl_changes = count.index == 0 ? local.backend_ssl_id : local.storefront_ssl_id
   }
 
   # Set up auto-renewal cron job
