@@ -57,16 +57,66 @@ jobs:
       
       - name: Generate environment file
         run: |
+          # Check if secrets are set, default to placeholders if not
+          # This prevents empty values in the generated .env file
+          echo "Checking for required secrets..."
+          DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
+          REDIS="${{ secrets.BACKEND_REDIS_URL }}"
+          JWT="${{ secrets.JWT_SECRET }}"
+          COOKIE="${{ secrets.COOKIE_SECRET }}"
+          ADMIN_CORS="${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}"
+          STORE_CORS="${{ secrets.BACKEND_MEDUSA_STORE_CORS }}"
+          BACKEND_URL="${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}"
+          
+          # Set defaults for any missing values
+          DB_URL=${DB_URL:-"postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca"}
+          REDIS=${REDIS:-"redis://redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"}
+          JWT=${JWT:-"$(openssl rand -hex 32)"}
+          COOKIE=${COOKIE:-"$(openssl rand -hex 32)"}
+          ADMIN_CORS=${ADMIN_CORS:-"https://admin-${{ env.NODE_ENV }}.flowdose.xyz"}
+          STORE_CORS=${STORE_CORS:-"https://${{ env.NODE_ENV }}.flowdose.xyz"}
+          BACKEND_URL=${BACKEND_URL:-"https://api-${{ env.NODE_ENV }}.flowdose.xyz"}
+          
+          # Create the environment file with validated values
           cat > backend/.env.${{ env.NODE_ENV }} << EOL
-          DATABASE_URL=${{ secrets.BACKEND_DATABASE_URL }}
-          REDIS_URL=${{ secrets.BACKEND_REDIS_URL }}
-          JWT_SECRET=${{ secrets.BACKEND_JWT_SECRET }}
-          COOKIE_SECRET=${{ secrets.BACKEND_COOKIE_SECRET }}
-          MEDUSA_ADMIN_CORS=${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}
-          MEDUSA_STORE_CORS=${{ secrets.BACKEND_MEDUSA_STORE_CORS }}
-          STORE_CORS=${{ secrets.BACKEND_STORE_CORS }}
-          MEDUSA_BACKEND_URL=${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}
+          # Core Settings
+          NODE_ENV=${{ env.NODE_ENV }}
+          PORT=9000
+          
+          # Database
+          DATABASE_URL=${DB_URL}
+          
+          # Redis
+          REDIS_URL=${REDIS}
+          CACHE_REDIS_URL=${REDIS}
+          EVENTS_REDIS_URL=${REDIS}
+          
+          # Security
+          JWT_SECRET=${JWT}
+          COOKIE_SECRET=${COOKIE}
+          
+          # CORS Settings
+          ADMIN_CORS=${ADMIN_CORS}
+          STORE_CORS=${STORE_CORS}
+          MEDUSA_ADMIN_CORS=${ADMIN_CORS}
+          MEDUSA_STORE_CORS=${STORE_CORS}
+          
+          # URL Configuration
+          MEDUSA_BACKEND_URL=${BACKEND_URL}
+          API_URL=${BACKEND_URL}
+          
+          # Admin and API Configuration
+          ENABLE_ADMIN=true
+          ENABLE_PUBLISHABLE_API_KEY=true
+          
+          # Storefront URL
+          STORE_URL=https://${{ env.NODE_ENV == 'production' && '' || '${{ env.NODE_ENV }}.' }}flowdose.xyz
           EOL
+          
+          # Display the generated environment file (with sensitive data masked)
+          echo "Generated environment file (sensitive values masked):"
+          cat backend/.env.${{ env.NODE_ENV }} | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
+          
           # Copy to temp location for deployment
           mkdir -p /tmp
           cp backend/.env.${{ env.NODE_ENV }} /tmp/backend.env
