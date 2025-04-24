@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/deploy-backend.yml'
+      - 'deploy-backend-trigger'
   workflow_dispatch:
     inputs:
       environment:

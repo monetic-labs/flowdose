@@ -1,0 +1,5 @@
+DEPLOY_STOREFRONT_TRIGGER=1
+# Change this number and commit to force a storefront deployment without changing any files
+# Last updated: 2025-04-24
+# This file is used to trigger only storefront deployments
+LAST_DEPLOY=2025-04-24T08:00:00Z 
