@@ -172,9 +172,32 @@ EOL
             # Ensure target directory exists
             mkdir -p /root/app/backend
             
-            cp /tmp/backend.env /root/app/backend/.env.\${ENV}
-            ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
-            echo "Environment file updated."
+            # Clean up any old or incorrect environment files
+            echo "Cleaning up old environment files..."
+            if [ -f "/root/app/backend/.env.symlink" ]; then
+                echo "Removing incorrect .env.symlink file..."
+                rm -f /root/app/backend/.env.symlink
+            fi
+            
+            # Hard-code the environment name when creating the file (for debugging)
+            echo "Creating environment file for \${ENV}..."
+            cp /tmp/backend.env "/root/app/backend/.env.\${ENV}"
+            
+            # Create a direct symlink with explicit paths
+            echo "Creating symlink from .env to .env.\${ENV}..."
+            rm -f /root/app/backend/.env
+            ln -sf "/root/app/backend/.env.\${ENV}" "/root/app/backend/.env"
+            
+            # Verify files were created properly
+            echo "Verifying environment files:"
+            ls -la /root/app/backend/.env*
+            
+            # Double-check that .env exists and has content
+            if [ ! -f "/root/app/backend/.env" ] || [ ! -s "/root/app/backend/.env" ]; then
+                echo "⚠️ WARNING: .env file is missing or empty. Copying directly as fallback..."
+                cp /tmp/backend.env /root/app/backend/.env
+                echo "✅ Direct copy completed."
+            fi
             
             # Verify and fix DATABASE_URL if the password is missing
             if ! grep -q "doadmin:[^@]\\+@" /root/app/backend/.env; then
