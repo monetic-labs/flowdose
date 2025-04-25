@@ -163,6 +163,20 @@ EOL
             ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
             echo "Environment file updated."
             
+            # Verify and fix DATABASE_URL if the password is missing
+            if ! grep -q "doadmin:[^@]\\+@" /root/app/backend/.env; then
+                echo "⚠️ DATABASE_URL missing password after copy, fixing it..."
+                # Extract the correct DATABASE_URL from the original file
+                DB_URL=\$(grep DATABASE_URL /tmp/backend.env)
+                # Create a temporary file without the broken DATABASE_URL
+                grep -v "DATABASE_URL" /root/app/backend/.env > /tmp/env.fixed
+                # Add the correct DATABASE_URL
+                echo "\$DB_URL" >> /tmp/env.fixed
+                # Replace the environment file
+                mv /tmp/env.fixed /root/app/backend/.env
+                echo "✅ Fixed DATABASE_URL in .env file"
+            fi
+            
             echo "Checking if our new variables were copied correctly..."
             grep -q "MEDUSA_ADMIN_EMAIL" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_EMAIL found in .env" || echo "❌ MEDUSA_ADMIN_EMAIL not found in .env"
             grep -q "MEDUSA_ADMIN_PASSWORD" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_PASSWORD found in .env" || echo "❌ MEDUSA_ADMIN_PASSWORD not found in .env"

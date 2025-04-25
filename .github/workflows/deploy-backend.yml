@@ -124,9 +124,13 @@ jobs:
           # Core Settings
           NODE_ENV=${ENV_NAME}
           PORT=9000
+          EOL
           
-          # Database
-          DATABASE_URL=${DB_URL}
+          # Add DATABASE_URL with explicit quoting to prevent line-wrapping issues
+          echo "DATABASE_URL=\"${DB_URL}\"" >> backend/.env.${ENV_NAME}
+          
+          # Continue with the rest of the environment variables
+          cat >> backend/.env.${ENV_NAME} << EOL
           
           # Redis
           REDIS_URL=${REDIS}
