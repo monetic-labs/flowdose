@@ -76,13 +76,38 @@ else
     PASSWORD_LENGTH="${#LOCAL_DB_PASSWORD}"
     echo "Local DB_PASSWORD: ${PASSWORD_START}...${PASSWORD_END} (length: ${PASSWORD_LENGTH})"
     
+    # Before the SSH command 
+    echo "Working with database password ${DB_PASSWORD:0:4}...${DB_PASSWORD: -4} (length: ${#DB_PASSWORD})"
+
+    # IMPORTANT DEBUGGING FIX: Create a temporary environment file with the correct database URL
+    # This will bypass all the complex expansion issues
+    cat > /tmp/fixed_db_env.txt << EOL
+    DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require
+    EOL
+
+    # Verify the temporary file has the correct password
+    echo "Created temp environment file with database URL (password masked):"
+    cat /tmp/fixed_db_env.txt | sed 's/doadmin:[^@]*@/doadmin:****@/g'
+
+    # Copy the temporary environment file to the server
+    echo "Copying temp environment file to server..."
+    scp -o StrictHostKeyChecking=no /tmp/fixed_db_env.txt $SSH_USER@$IP_ADDRESS:/tmp/fixed_db_env.txt
+
     # SSH to the backend server and perform deployment
     # NOTE: We're using a different technique to ensure DB_PASSWORD gets passed correctly
-    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS "export SERVER_DB_PASSWORD='${LOCAL_DB_PASSWORD}'; bash -s" << ENDSSH
-        # Use the password we passed in directly
-        export DB_PASSWORD="\${SERVER_DB_PASSWORD}"
+    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS "bash -s" << ENDSSH
+        echo "Checking for the fixed database environment file:"
+        if [ -f "/tmp/fixed_db_env.txt" ]; then
+            DB_URL=\$(cat /tmp/fixed_db_env.txt)
+            # Extract just the password part to verify it was received correctly
+            DB_PASSWORD_IN_URL=\$(echo "\${DB_URL}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+            PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
+            PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
+            echo "✅ Received DB_URL with password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
+        else
+            echo "❌ Fixed database environment file not found!"
+        fi
         
-        echo "DEBUG: Received DB_PASSWORD length: \${#DB_PASSWORD}"
         export ENV="${ENV:-staging}"
         
         # Display important environment variables for debugging (partially masked)
@@ -139,6 +164,26 @@ else
             
             echo "Copying environment file to backend directory..."
             cp /tmp/backend.env /root/app/backend/.env.\${ENV}
+            
+            # IMPORTANT FIX: Use our fixed database URL from the temp file instead of trying to parse/update it
+            if [ -f "/tmp/fixed_db_env.txt" ]; then
+                echo "Updating environment file with the correct DATABASE_URL from fixed file..."
+                FIXED_DB_URL=\$(cat /tmp/fixed_db_env.txt)
+                
+                # Create a new temporary file with the correct DATABASE_URL
+                grep -v "DATABASE_URL=" /root/app/backend/.env.\${ENV} > /root/app/backend/.env.\${ENV}.tmp
+                echo "\${FIXED_DB_URL}" >> /root/app/backend/.env.\${ENV}.tmp
+                mv /root/app/backend/.env.\${ENV}.tmp /root/app/backend/.env.\${ENV}
+                
+                # Extract password for debugging
+                DB_PASSWORD_IN_URL=\$(echo "\${FIXED_DB_URL}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+                PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
+                PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
+                echo "Updated environment file with correct DATABASE_URL (password: \${PASSWORD_START}...\${PASSWORD_END})"
+            else
+                echo "WARNING: fixed_db_env.txt not found! Database connection may fail."
+            fi
+            
             ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
             echo "Environment file updated."
             
@@ -173,37 +218,8 @@ else
             echo "Last 3 lines:"
             tail -n 3 /root/app/backend/.env
             
-            # Verify DATABASE_URL has the password
-            if ! grep -q "doadmin:.*@" /root/app/backend/.env; then
-                echo "DATABASE_URL not found or missing password, updating it..."
-                DB_HOST="postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com"
-                DB_PORT="25060"
-                DB_NAME="defaultdb"
-                DB_SSL="sslmode=require"
-                
-                # Show passwords more explicitly for debugging (first/last 4 chars)
-                if [ -n "\${DB_PASSWORD}" ]; then
-                    PASSWORD_START=\${DB_PASSWORD:0:4}
-                    PASSWORD_END=\${DB_PASSWORD: -4}
-                    echo "Using DB_PASSWORD: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD})"
-                else
-                    echo "WARNING: DB_PASSWORD is empty or unset"
-                fi
-                
-                # Update or add the DATABASE_URL with the password from the parent shell
-                grep -v "DATABASE_URL=" /root/app/backend/.env > /root/app/backend/.env.tmp || touch /root/app/backend/.env.tmp
-                echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" >> /root/app/backend/.env.tmp
-                mv /root/app/backend/.env.tmp /root/app/backend/.env
-                echo "DATABASE_URL updated with password"
-                
-                # Show the updated DATABASE_URL with partially masked password
-                DB_URL_LINE=\$(grep "DATABASE_URL" /root/app/backend/.env)
-                # Extract just the password part
-                DB_PASSWORD_IN_URL=\$(echo "\${DB_URL_LINE}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
-                PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
-                PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
-                echo "Updated DATABASE_URL with password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
-            fi
+            # No longer need to verify and update DATABASE_URL as it's handled by our fixed approach
+            # This removes the problematic section that was trying to update the DATABASE_URL
         else
             echo "❌ ERROR: /tmp/backend.env file not found!"
             # Create a minimal .env file
