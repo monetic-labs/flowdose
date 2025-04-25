@@ -68,7 +68,11 @@ else
     fi
     
     # SSH to the backend server and perform deployment
-    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
+    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
+        # Export the password from parent shell
+        export DB_PASSWORD="${DB_PASSWORD}"
+        export ENV="${ENV:-staging}"
+        
         # Check if directory exists, if not clone the repository
         if [ ! -d "/root/app/backend" ]; then
             echo "Backend directory doesn't exist, creating..."
@@ -100,9 +104,24 @@ else
         
         # Copy over the environment file (this would be uploaded in a separate step)
         if [ -f "/tmp/backend.env" ]; then
-            cp /tmp/backend.env /root/app/backend/.env.${ENV}
-            ln -sf /root/app/backend/.env.${ENV} /root/app/backend/.env
+            cp /tmp/backend.env /root/app/backend/.env.\${ENV}
+            ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
             echo "Environment file updated."
+            
+            # Verify DATABASE_URL has the password
+            if ! grep -q "doadmin:.*@" /root/app/backend/.env; then
+                echo "DATABASE_URL not found or missing password, updating it..."
+                DB_HOST="postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com"
+                DB_PORT="25060"
+                DB_NAME="defaultdb"
+                DB_SSL="sslmode=require"
+                
+                # Update or add the DATABASE_URL with the password from the parent shell
+                grep -v "DATABASE_URL=" /root/app/backend/.env > /root/app/backend/.env.tmp || touch /root/app/backend/.env.tmp
+                echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" >> /root/app/backend/.env.tmp
+                mv /root/app/backend/.env.tmp /root/app/backend/.env
+                echo "DATABASE_URL updated with password"
+            fi
         fi
         
         # Enable Corepack for Yarn 4
@@ -143,7 +162,7 @@ else
         cd /root/app/backend
         
         echo "Backend deployment completed successfully!"
-ENDSSH
+    ENDSSH
 fi
 
 echo "Backend deployment script completed." 
