@@ -108,26 +108,25 @@ BRANCH=$([ "$ENV" == "production" ] && echo "main" || echo "staging")
 echo "Will deploy from branch: $BRANCH"
 
 # Create a secure way to pass the DB_PASSWORD
-# The following approach passes the password directly without relying on SSH environment passing
-ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
-    # Set variables directly (not using the heredoc expansion)
-    # This ensures all variables are set on the remote server
+# Remove quotes from heredoc to allow variable expansion
+ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
+    # Variables will now be expanded from the parent shell
     DB_PASSWORD="${DB_PASSWORD}"
-    ENV="staging"
-    BRANCH="staging"
+    ENV="${ENV}"
+    BRANCH="${BRANCH}"
     
     set -e  # Exit immediately if a command fails
     
     echo "Connected to server, starting deployment..."
     echo "Current directory: $(pwd)"
-    echo "Environment: $ENV"
-    echo "Branch: $BRANCH"
+    echo "Environment: \$ENV"
+    echo "Branch: \$BRANCH"
     
     # Server identification
     echo "=== SERVER IDENTIFICATION ==="
-    echo "Hostname: $(hostname)"
-    echo "Current directory: $(pwd)"
-    echo "Current user: $(whoami)"
+    echo "Hostname: \$(hostname)"
+    echo "Current directory: \$(pwd)"
+    echo "Current user: \$(whoami)"
     echo "Listing /root/app directory:"
     ls -la /root/app || echo "Directory doesn't exist yet"
     echo "==========================="
@@ -148,7 +147,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
     
     # Simple direct clone approach
     echo "Cloning repository..."
-    git clone --depth 1 -b $BRANCH https://github.com/monetic-labs/flowdose.git /root/app/temp-repo
+    git clone --depth 1 -b \$BRANCH https://github.com/monetic-labs/flowdose.git /root/app/temp-repo
     
     # Check if clone was successful
     if [ ! -d "/root/app/temp-repo" ]; then
@@ -191,7 +190,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
     # Navigate to backend directory
     echo "Changing to backend directory..."
     cd /root/app/backend
-    echo "Now in: $(pwd)"
+    echo "Now in: \$(pwd)"
     
     # Download DigitalOcean CA certificate
     echo "Downloading DigitalOcean CA certificate..."
@@ -211,8 +210,8 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
         DB_NAME="defaultdb"
         DB_SSL="sslmode=require"
         
-        echo "# Database password being set: ${DB_PASSWORD:0:3}...${DB_PASSWORD: -3}" # Show first and last 3 chars for validation
-        echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?${DB_SSL}" > /root/app/backend/.env
+        echo "# Database password being set: \${DB_PASSWORD:0:3}...\${DB_PASSWORD: -3}" # Show first and last 3 chars for validation
+        echo "DATABASE_URL=postgresql://doadmin:\${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" > /root/app/backend/.env
     else
         echo "Found environment file at /tmp/backend.env, copying to application directory"
         cp /tmp/backend.env /root/app/backend/.env
@@ -238,7 +237,7 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << 'ENDSSH'
             DB_NAME="defaultdb"
             DB_SSL="sslmode=require"
             
-            echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?${DB_SSL}" >> /root/app/backend/.env
+            echo "DATABASE_URL=postgresql://doadmin:\${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" >> /root/app/backend/.env
         fi
     fi
     
