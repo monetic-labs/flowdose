@@ -29,6 +29,8 @@ jobs:
       GITHUB_ACTIONS: "true"
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      MEDUSA_ADMIN_EMAIL: ${{ secrets.MEDUSA_ADMIN_EMAIL }}
+      MEDUSA_ADMIN_PASSWORD: ${{ secrets.MEDUSA_ADMIN_PASSWORD }}
     
     steps:
       - name: Checkout code
@@ -81,6 +83,8 @@ jobs:
           ADMIN_CORS=${ADMIN_CORS:-"https://admin-${ENV_NAME}.flowdose.xyz"}
           STORE_CORS=${STORE_CORS:-"https://${ENV_NAME}.flowdose.xyz"}
           BACKEND_URL=${BACKEND_URL:-"https://api-${ENV_NAME}.flowdose.xyz"}
+          ADMIN_EMAIL=${ADMIN_EMAIL:-"${MEDUSA_ADMIN_EMAIL}"}
+          ADMIN_PASSWORD=${ADMIN_PASSWORD:-"${MEDUSA_ADMIN_PASSWORD}"}
           
           # Define store URL based on environment
           if [ "$ENV_NAME" = "production" ]; then
@@ -120,6 +124,10 @@ jobs:
           # Admin and API Configuration
           ENABLE_ADMIN=true
           ENABLE_PUBLISHABLE_API_KEY=true
+          
+          # Admin User
+          MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}
+          MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}
           
           # Storefront URL
           STORE_URL=${STORE_URL}

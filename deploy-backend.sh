@@ -104,9 +104,27 @@ else
         
         # Copy over the environment file (this would be uploaded in a separate step)
         if [ -f "/tmp/backend.env" ]; then
+            echo "Found /tmp/backend.env - showing first few lines (with passwords masked):"
+            head -n 5 /tmp/backend.env | sed 's/\(PASSWORD=[^[:space:]]*\)/PASSWORD=******/g'
+            
+            echo "Copying environment file to backend directory..."
             cp /tmp/backend.env /root/app/backend/.env.\${ENV}
             ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
             echo "Environment file updated."
+            
+            echo "Checking if our new variables were copied correctly..."
+            grep -q "MEDUSA_ADMIN_EMAIL" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_EMAIL found in .env" || echo "❌ MEDUSA_ADMIN_EMAIL not found in .env"
+            grep -q "MEDUSA_ADMIN_PASSWORD" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_PASSWORD found in .env" || echo "❌ MEDUSA_ADMIN_PASSWORD not found in .env"
+            
+            echo "Checking DATABASE_URL in the .env file:"
+            grep "DATABASE_URL" /root/app/backend/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g' || echo "❌ DATABASE_URL not found in .env"
+            
+            echo "Checking line count and structure of .env file:"
+            wc -l /root/app/backend/.env
+            echo "First 3 lines:"
+            head -n 3 /root/app/backend/.env
+            echo "Last 3 lines:"
+            tail -n 3 /root/app/backend/.env
             
             # Verify DATABASE_URL has the password
             if ! grep -q "doadmin:.*@" /root/app/backend/.env; then
@@ -121,7 +139,27 @@ else
                 echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" >> /root/app/backend/.env.tmp
                 mv /root/app/backend/.env.tmp /root/app/backend/.env
                 echo "DATABASE_URL updated with password"
+                
+                echo "Updated DATABASE_URL in the .env file:"
+                grep "DATABASE_URL" /root/app/backend/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g'
             fi
+        else
+            echo "❌ ERROR: /tmp/backend.env file not found!"
+            # Create a minimal .env file
+            echo "Creating minimal .env file..."
+            cat > /root/app/backend/.env << EOF
+# Core Settings
+NODE_ENV=\${ENV}
+PORT=9000
+
+# Database
+DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require
+
+# Admin User
+MEDUSA_ADMIN_EMAIL=${MEDUSA_ADMIN_EMAIL}
+MEDUSA_ADMIN_PASSWORD=${MEDUSA_ADMIN_PASSWORD}
+EOF
+            echo "Created minimal .env file."
         fi
         
         # Enable Corepack for Yarn 4
