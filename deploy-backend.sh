@@ -160,96 +160,67 @@ EOL
             
             echo "Copying environment file to backend directory..."
             cp /tmp/backend.env /root/app/backend/.env.\${ENV}
-            
-            # IMPORTANT FIX: Check for our fixed database URL file and use it
-            if [ -f "/tmp/fixed_db_env.txt" ]; then
-                echo "Found fixed database URL file. Using it to update the environment file..."
-                FIXED_DB_URL=\$(cat /tmp/fixed_db_env.txt)
-                
-                # Extract password for verification
-                DB_PASSWORD_IN_URL=\$(echo "\${FIXED_DB_URL}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
-                PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
-                PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
-                echo "Fixed DB URL contains password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
-                
-                # Update the DATABASE_URL in the environment file
-                echo "Updating DATABASE_URL in environment file..."
-                grep -v "DATABASE_URL=" /root/app/backend/.env.\${ENV} > /tmp/env.tmp
-                cat /tmp/fixed_db_env.txt >> /tmp/env.tmp
-                mv /tmp/env.tmp /root/app/backend/.env.\${ENV}
-                echo "Environment file updated with fixed DATABASE_URL"
-            else
-                echo "WARNING: fixed_db_env.txt not found! Using environment file as is."
-            fi
-            
-            # Similarly, check for fixed Redis URL file and use it
-            if [ -f "/tmp/fixed_redis_env.txt" ]; then
-                echo "Found fixed Redis URL file. Using it to update the environment file..."
-                
-                # Update the Redis URLs in the environment file
-                grep -v "REDIS_URL=" /root/app/backend/.env.\${ENV} | grep -v "CACHE_REDIS_URL=" | grep -v "EVENTS_REDIS_URL=" > /tmp/env.tmp
-                cat /tmp/fixed_redis_env.txt >> /tmp/env.tmp
-                mv /tmp/env.tmp /root/app/backend/.env.\${ENV}
-                echo "Environment file updated with fixed Redis URLs"
-            else
-                echo "WARNING: fixed_redis_env.txt not found! Redis connections may fail."
-            fi
-            
-            # Create symlink to the environment file
             ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
-            echo "Environment file symbolic link created."
+            echo "Environment file updated."
             
-            # Verify the final environment file
-            echo "Verifying final environment file:"
+            echo "Checking if our new variables were copied correctly..."
+            grep -q "MEDUSA_ADMIN_EMAIL" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_EMAIL found in .env" || echo "❌ MEDUSA_ADMIN_EMAIL not found in .env"
+            grep -q "MEDUSA_ADMIN_PASSWORD" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_PASSWORD found in .env" || echo "❌ MEDUSA_ADMIN_PASSWORD not found in .env"
+            
+            # Check DATABASE_URL but don't try to modify it
+            echo "Verifying DATABASE_URL in the environment file:"
             if grep -q "DATABASE_URL" /root/app/backend/.env; then
                 DB_URL_LINE=\$(grep "DATABASE_URL" /root/app/backend/.env)
-                # Check if it contains a password
                 if echo "\${DB_URL_LINE}" | grep -q "doadmin:.*@"; then
-                    DB_PASSWORD_IN_URL=\$(echo "\${DB_URL_LINE}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
-                    PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
-                    PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
-                    echo "✅ Final environment file has DATABASE_URL with password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
+                    DB_PASS=\$(echo "\${DB_URL_LINE}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+                    echo "✅ DATABASE_URL contains password: \${DB_PASS:0:4}...\${DB_PASS: -4} (length: \${#DB_PASS})"
                 else
-                    echo "❌ Final environment file DATABASE_URL missing password!"
+                    echo "⚠️ WARNING: DATABASE_URL appears to be missing a password: \${DB_URL_LINE}"
                 fi
             else
-                echo "❌ Final environment file missing DATABASE_URL!"
+                echo "❌ DATABASE_URL not found in .env file"
             fi
+            
+            # Display structure of the environment file
+            echo "Environment file structure:"
+            wc -l /root/app/backend/.env
+            echo "First 3 lines:"
+            head -n 3 /root/app/backend/.env
+            echo "Last 3 lines:"
+            tail -n 3 /root/app/backend/.env
         else
             echo "❌ ERROR: /tmp/backend.env file not found!"
-            # Create a minimal environment file
-            echo "Creating minimal environment file..."
-            mkdir -p /root/app/backend
-            
-            # Check for our fixed database URL file
-            if [ -f "/tmp/fixed_db_env.txt" ]; then
-                FIXED_DB_URL=\$(cat /tmp/fixed_db_env.txt)
-                # Create minimal environment file with fixed DB URL
-                cat > /root/app/backend/.env << EOL
+            # Create a minimal .env file
+            echo "Creating minimal .env file..."
+            cat > /root/app/backend/.env << EOF
 # Core Settings
 NODE_ENV=\${ENV}
 PORT=9000
 
 # Database
-\${FIXED_DB_URL}
-EOL
+DATABASE_URL=postgresql://doadmin:\${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require
 
-                # Add Redis URLs if available
-                if [ -f "/tmp/fixed_redis_env.txt" ]; then
-                    echo "" >> /root/app/backend/.env
-                    echo "# Redis" >> /root/app/backend/.env
-                    cat /tmp/fixed_redis_env.txt >> /root/app/backend/.env
+# Redis
+REDIS_URL=rediss://default:\${REDIS_PASSWORD:-placeholder}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061
+CACHE_REDIS_URL=rediss://default:\${REDIS_PASSWORD:-placeholder}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061
+EVENTS_REDIS_URL=rediss://default:\${REDIS_PASSWORD:-placeholder}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061
+
+# Admin User
+MEDUSA_ADMIN_EMAIL=\${MEDUSA_ADMIN_EMAIL:-admin@flowdose.xyz}
+MEDUSA_ADMIN_PASSWORD=\${MEDUSA_ADMIN_PASSWORD:-secretpassword}
+EOF
+            echo "Created minimal .env file."
+            
+            # Verify the DB_PASSWORD is included
+            if grep -q "doadmin:\${DB_PASSWORD}" /root/app/backend/.env; then
+                echo "✅ Minimal .env file has DB_PASSWORD placeholder"
+                if [ -n "\${DB_PASSWORD}" ]; then
+                    echo "✅ DB_PASSWORD is set, connection should work"
                 else
-                    echo "" >> /root/app/backend/.env
-                    echo "# Redis - WARNING: Using placeholders, connections may fail" >> /root/app/backend/.env
-                    echo "REDIS_URL=rediss://default:placeholder@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061" >> /root/app/backend/.env
-                    echo "CACHE_REDIS_URL=rediss://default:placeholder@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061" >> /root/app/backend/.env
-                    echo "EVENTS_REDIS_URL=rediss://default:placeholder@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061" >> /root/app/backend/.env
+                    echo "❌ DB_PASSWORD is empty, connection will likely fail"
                 fi
-                echo "Created minimal environment file with fixed DATABASE_URL"
             else
-                echo "❌ ERROR: No fixed DB URL file found. Cannot continue!"
-                exit 1
+                echo "❌ Something went wrong creating the minimal .env file"
             fi
         fi
         

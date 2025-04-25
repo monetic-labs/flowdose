@@ -64,20 +64,46 @@ jobs:
           # This prevents empty values in the generated .env file
           echo "Checking for required secrets..."
           DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
+          DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
           # For Redis, use the secure URL with auth
           REDIS="${{ secrets.BACKEND_REDIS_URL }}"
+          REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
           JWT="${{ secrets.BACKEND_JWT_SECRET }}"
           COOKIE="${{ secrets.BACKEND_COOKIE_SECRET }}"
           ADMIN_CORS="${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}"
           STORE_CORS="${{ secrets.BACKEND_MEDUSA_STORE_CORS }}"
           BACKEND_URL="${{ secrets.BACKEND_MEDUSA_BACKEND_URL }}"
+          ADMIN_EMAIL="${{ secrets.MEDUSA_ADMIN_EMAIL }}"
+          ADMIN_PASSWORD="${{ secrets.MEDUSA_ADMIN_PASSWORD }}"
           
           # Set environment variables for use in the template
           ENV_NAME="${{ env.NODE_ENV }}"
           
           # Set defaults for any missing values
-          DB_URL=${DB_URL:-"postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=verify-ca"}
-          REDIS=${REDIS:-"rediss://default:${REDIS_PASSWORD}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"}
+          if [ -z "$DB_URL" ]; then
+            if [ -n "$DB_PASSWORD" ]; then
+              echo "Using DB_PASSWORD to create DATABASE_URL"
+              DB_URL="postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+              # Print the first few characters to verify (with masking)
+              echo "Created DB_URL with password: ${DB_PASSWORD:0:4}...${DB_PASSWORD: -4} (length: ${#DB_PASSWORD})"
+            else
+              echo "WARNING: No DB_PASSWORD provided, using placeholder"
+              DB_URL="postgresql://doadmin:placeholder@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+            fi
+          fi
+          
+          if [ -z "$REDIS" ]; then
+            if [ -n "$REDIS_PASSWORD" ]; then
+              echo "Using REDIS_PASSWORD to create REDIS_URL"
+              REDIS="rediss://default:${REDIS_PASSWORD}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"
+              # Print the first few characters to verify (with masking)
+              echo "Created REDIS with password: ${REDIS_PASSWORD:0:4}...${REDIS_PASSWORD: -4} (length: ${#REDIS_PASSWORD})"
+            else
+              echo "WARNING: No REDIS_PASSWORD provided, using placeholder"
+              REDIS="rediss://default:placeholder@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"
+            fi
+          fi
+          
           JWT=${JWT:-"$(openssl rand -hex 32)"}
           COOKIE=${COOKIE:-"$(openssl rand -hex 32)"}
           ADMIN_CORS=${ADMIN_CORS:-"https://admin-${ENV_NAME}.flowdose.xyz"}
@@ -136,6 +162,14 @@ jobs:
           # Display the generated environment file (with sensitive data masked)
           echo "Generated environment file (sensitive values masked):"
           cat backend/.env.${ENV_NAME} | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
+          
+          # Verify DATABASE_URL has the password
+          if grep -q "doadmin:.*@" backend/.env.${ENV_NAME}; then
+            DB_PASSWORD_IN_URL=$(grep "DATABASE_URL" backend/.env.${ENV_NAME} | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+            echo "✅ DATABASE_URL contains password: ${DB_PASSWORD_IN_URL:0:4}...${DB_PASSWORD_IN_URL: -4} (length: ${#DB_PASSWORD_IN_URL})"
+          else
+            echo "❌ WARNING: DATABASE_URL is missing a password!"
+          fi
           
           # Copy to temp location for deployment
           mkdir -p /tmp
