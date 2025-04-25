@@ -307,9 +307,10 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     export NODE_TLS_REJECT_UNAUTHORIZED=0
     yarn medusa db:migrate || echo "Migration failed, but continuing deployment"
     
-    # Start the application with PM2
-    echo "Starting application with PM2..."
-    pm2 start yarn --name "medusa-server" -- start
+    # Start the application with PM2 from the build directory
+    echo "Starting application with PM2 from build directory..."
+    cd /root/app/backend/.medusa/server && NODE_ENV=production pm2 start --name "medusa-server" yarn -- start
+    cd /root/app/backend/.medusa/server && NODE_ENV=production pm2 start --name "medusa-worker" yarn -- start --worker
     
     # Save the PM2 configuration
     pm2 save
