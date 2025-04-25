@@ -60,14 +60,16 @@ jobs:
       
       - name: Generate environment file
         run: |
-          # Check if secrets are set, default to placeholders if not
-          # This prevents empty values in the generated .env file
-          echo "Checking for required secrets..."
-          DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
+          #############################################
+          # ENVIRONMENT VARIABLES SOURCE ORGANIZATION #
+          #############################################
+          
+          # These are the environment secrets from GitHub
+          echo "Sourcing environment variables from GitHub secrets..."
           DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-          # For Redis, use the secure URL with auth
-          REDIS="${{ secrets.BACKEND_REDIS_URL }}"
           REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+          DB_URL="${{ secrets.BACKEND_DATABASE_URL }}"
+          REDIS="${{ secrets.BACKEND_REDIS_URL }}"
           JWT="${{ secrets.BACKEND_JWT_SECRET }}"
           COOKIE="${{ secrets.BACKEND_COOKIE_SECRET }}"
           ADMIN_CORS="${{ secrets.BACKEND_MEDUSA_ADMIN_CORS }}"
@@ -76,34 +78,47 @@ jobs:
           ADMIN_EMAIL="${{ secrets.MEDUSA_ADMIN_EMAIL }}"
           ADMIN_PASSWORD="${{ secrets.MEDUSA_ADMIN_PASSWORD }}"
           
-          # Set environment variables for use in the template
+          # Environment name from the workflow context
           ENV_NAME="${{ env.NODE_ENV }}"
+          echo "Using environment: $ENV_NAME"
           
-          # Set defaults for any missing values
+          #############################################
+          # DATABASE URL CONSTRUCTION                 #
+          #############################################
+          
+          # If no DATABASE_URL is provided, construct it from DB_PASSWORD
           if [ -z "$DB_URL" ]; then
             if [ -n "$DB_PASSWORD" ]; then
-              echo "Using DB_PASSWORD to create DATABASE_URL"
+              echo "Constructing DATABASE_URL using DB_PASSWORD..."
               DB_URL="postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
-              # Print the first few characters to verify (with masking)
-              echo "Created DB_URL with password: ${DB_PASSWORD:0:4}...${DB_PASSWORD: -4} (length: ${#DB_PASSWORD})"
+              echo "Created DATABASE_URL with password: ${DB_PASSWORD:0:4}...${DB_PASSWORD: -4} (length: ${#DB_PASSWORD})"
             else
-              echo "WARNING: No DB_PASSWORD provided, using placeholder"
-              DB_URL="postgresql://doadmin:placeholder@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+              echo "ERROR: No DB_PASSWORD available for DATABASE_URL construction!"
+              exit 1
             fi
           fi
           
+          #############################################
+          # REDIS URL CONSTRUCTION                    #
+          #############################################
+          
+          # If no REDIS_URL is provided, construct it from REDIS_PASSWORD
           if [ -z "$REDIS" ]; then
             if [ -n "$REDIS_PASSWORD" ]; then
-              echo "Using REDIS_PASSWORD to create REDIS_URL"
+              echo "Constructing REDIS_URL using REDIS_PASSWORD..."
               REDIS="rediss://default:${REDIS_PASSWORD}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"
-              # Print the first few characters to verify (with masking)
-              echo "Created REDIS with password: ${REDIS_PASSWORD:0:4}...${REDIS_PASSWORD: -4} (length: ${#REDIS_PASSWORD})"
+              echo "Created REDIS_URL with password: ${REDIS_PASSWORD:0:4}...${REDIS_PASSWORD: -4} (length: ${#REDIS_PASSWORD})"
             else
-              echo "WARNING: No REDIS_PASSWORD provided, using placeholder"
+              echo "WARNING: No REDIS_PASSWORD available for REDIS_URL construction."
               REDIS="rediss://default:placeholder@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061"
             fi
           fi
           
+          #############################################
+          # DEFAULT VALUES FOR MISSING VARIABLES      #
+          #############################################
+          
+          # Generate default values for essential configuration
           JWT=${JWT:-"$(openssl rand -hex 32)"}
           COOKIE=${COOKIE:-"$(openssl rand -hex 32)"}
           ADMIN_CORS=${ADMIN_CORS:-"https://admin-${ENV_NAME}.flowdose.xyz"}
@@ -119,60 +134,80 @@ jobs:
             STORE_URL="https://${ENV_NAME}.flowdose.xyz"
           fi
           
-          # Write environment file line by line to avoid any quoting/newline issues
-          ENV_FILE="backend/.env.${ENV_NAME}"
-          echo "Writing environment file to $ENV_FILE..."
+          #############################################
+          # ENVIRONMENT FILE CREATION                 #
+          #############################################
           
+          # Define the environment file path
+          ENV_FILE="backend/.env.${ENV_NAME}"
+          echo "Creating environment file at $ENV_FILE..."
+          
+          # Create the environment file line by line to avoid formatting issues
           echo "# Core Settings" > $ENV_FILE
           echo "NODE_ENV=${ENV_NAME}" >> $ENV_FILE
           echo "PORT=9000" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
+          # CRITICAL: Database configuration must be properly formatted
           echo "# Database" >> $ENV_FILE
           echo "DATABASE_URL=${DB_URL}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# Redis" >> $ENV_FILE
           echo "REDIS_URL=${REDIS}" >> $ENV_FILE
           echo "CACHE_REDIS_URL=${REDIS}" >> $ENV_FILE
           echo "EVENTS_REDIS_URL=${REDIS}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# Security" >> $ENV_FILE
           echo "JWT_SECRET=${JWT}" >> $ENV_FILE
           echo "COOKIE_SECRET=${COOKIE}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# CORS Settings" >> $ENV_FILE
           echo "ADMIN_CORS=${ADMIN_CORS}" >> $ENV_FILE
           echo "STORE_CORS=${STORE_CORS}" >> $ENV_FILE
           echo "MEDUSA_ADMIN_CORS=${ADMIN_CORS}" >> $ENV_FILE
           echo "MEDUSA_STORE_CORS=${STORE_CORS}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# URL Configuration" >> $ENV_FILE
           echo "MEDUSA_BACKEND_URL=${BACKEND_URL}" >> $ENV_FILE
           echo "API_URL=${BACKEND_URL}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# Admin and API Configuration" >> $ENV_FILE
           echo "ENABLE_ADMIN=true" >> $ENV_FILE
           echo "ENABLE_PUBLISHABLE_API_KEY=true" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# Admin User" >> $ENV_FILE
           echo "MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}" >> $ENV_FILE
           echo "MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> $ENV_FILE
           echo "" >> $ENV_FILE
+          
           echo "# Storefront URL" >> $ENV_FILE
           echo "STORE_URL=${STORE_URL}" >> $ENV_FILE
           
-          # Display the generated environment file (with sensitive data masked)
-          echo "Generated environment file (sensitive values masked):"
+          #############################################
+          # VERIFICATION AND PREPARATION FOR DEPLOYMENT  #
+          #############################################
+          
+          # Display the environment file (masking sensitive values)
+          echo "Verifying environment file content (sensitive values masked):"
           cat $ENV_FILE | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
           
-          # Verify DATABASE_URL has the password
+          # Verify DATABASE_URL has a password
           if grep -q "doadmin:.*@" $ENV_FILE; then
             DB_PASSWORD_IN_URL=$(grep "DATABASE_URL" $ENV_FILE | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
             echo "✅ DATABASE_URL contains password: ${DB_PASSWORD_IN_URL:0:4}...${DB_PASSWORD_IN_URL: -4} (length: ${#DB_PASSWORD_IN_URL})"
           else
-            echo "❌ WARNING: DATABASE_URL is missing a password!"
+            echo "❌ ERROR: DATABASE_URL is missing a password! Deployment will fail."
+            exit 1
           fi
           
-          # Copy to temp location for deployment
+          # Copy to temporary location for deployment
+          echo "Copying environment file to /tmp for deployment..."
           mkdir -p /tmp
           cp $ENV_FILE /tmp/backend.env
       
