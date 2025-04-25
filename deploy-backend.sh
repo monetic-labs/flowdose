@@ -179,14 +179,45 @@ EOL
                 rm -f /root/app/backend/.env.symlink
             fi
             
+            # Check the content of the backend.env file before copying
+            if [ -f "/tmp/backend.env" ]; then
+                echo "Contents of /tmp/backend.env (with passwords masked):"
+                cat /tmp/backend.env | grep -v "PASSWORD\|SECRET\|KEY" | head -n 10
+                echo "Checking DATABASE_URL specifically:"
+                DATABASE_URL_LINE=\$(grep "DATABASE_URL" /tmp/backend.env)
+                if [ -n "\$DATABASE_URL_LINE" ]; then
+                    # Mask the password for security
+                    MASKED_URL=\$(echo "\$DATABASE_URL_LINE" | sed 's/doadmin:[^@]*@/doadmin:****@/g')
+                    echo "Found DATABASE_URL: \$MASKED_URL"
+                    
+                    # Check if it's properly formed
+                    if echo "\$DATABASE_URL_LINE" | grep -q "doadmin:.*@.*:.*\/"; then
+                        echo "✅ DATABASE_URL appears to be properly formed"
+                    else
+                        echo "⚠️ WARNING: DATABASE_URL may be malformed"
+                    fi
+                else
+                    echo "❌ No DATABASE_URL found in backend.env"
+                fi
+            else
+                echo "❌ /tmp/backend.env file does not exist!"
+            fi
+            
             # Hard-code the environment name when creating the file (for debugging)
             echo "Creating environment file for \${ENV}..."
-            cp /tmp/backend.env "/root/app/backend/.env.\${ENV}"
-            
-            # Create a direct symlink with explicit paths
-            echo "Creating symlink from .env to .env.\${ENV}..."
-            rm -f /root/app/backend/.env
-            ln -sf "/root/app/backend/.env.\${ENV}" "/root/app/backend/.env"
+            if [ "\${ENV}" = "staging" ]; then
+                echo "Using explicit staging environment..."
+                cp /tmp/backend.env "/root/app/backend/.env.staging"
+                echo "Creating direct symlink to staging environment..."
+                rm -f /root/app/backend/.env
+                ln -sf "/root/app/backend/.env.staging" "/root/app/backend/.env"
+            else
+                echo "Using environment: \${ENV}"
+                cp /tmp/backend.env "/root/app/backend/.env.\${ENV}"
+                echo "Creating symlink to environment \${ENV}..."
+                rm -f /root/app/backend/.env
+                ln -sf "/root/app/backend/.env.\${ENV}" "/root/app/backend/.env"
+            fi
             
             # Verify files were created properly
             echo "Verifying environment files:"
@@ -199,11 +230,24 @@ EOL
                 echo "✅ Direct copy completed."
             fi
             
-            # Verify and fix DATABASE_URL if the password is missing
-            if ! grep -q "doadmin:[^@]\\+@" /root/app/backend/.env; then
-                echo "⚠️ DATABASE_URL missing password after copy, fixing it..."
+            # Verify and fix DATABASE_URL if the password is missing or malformed
+            if ! grep -q "doadmin:.*@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb" /root/app/backend/.env; then
+                echo "⚠️ DATABASE_URL is missing or malformed, fixing it..."
                 # Extract the correct DATABASE_URL from the original file
                 DB_URL=\$(grep DATABASE_URL /tmp/backend.env)
+                # Check if we got a proper URL
+                if [ -z "\$DB_URL" ] || ! echo "\$DB_URL" | grep -q "doadmin:.*@"; then
+                    echo "⚠️ Could not get proper DATABASE_URL from /tmp/backend.env"
+                    # Create a direct DATABASE_URL with the current DB_PASSWORD
+                    if [ -n "\$DB_PASSWORD" ]; then
+                        echo "Creating DATABASE_URL with password directly..."
+                        DB_URL="DATABASE_URL=postgresql://doadmin:\${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+                    else
+                        echo "❌ No DB_PASSWORD available! Database connection will likely fail."
+                        DB_URL="DATABASE_URL=postgresql://doadmin:placeholder@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+                    fi
+                fi
+                
                 # Create a temporary file without the broken DATABASE_URL
                 grep -v "DATABASE_URL" /root/app/backend/.env > /tmp/env.fixed
                 # Add the correct DATABASE_URL
@@ -211,6 +255,17 @@ EOL
                 # Replace the environment file
                 mv /tmp/env.fixed /root/app/backend/.env
                 echo "✅ Fixed DATABASE_URL in .env file"
+                
+                # If we're using staging, update the .env.staging file too
+                if [ "\${ENV}" = "staging" ]; then
+                    echo "Updating .env.staging with fixed DATABASE_URL..."
+                    if [ -f "/root/app/backend/.env.staging" ]; then
+                        grep -v "DATABASE_URL" /root/app/backend/.env.staging > /tmp/env.staging.fixed
+                        echo "\$DB_URL" >> /tmp/env.staging.fixed
+                        mv /tmp/env.staging.fixed /root/app/backend/.env.staging
+                        echo "✅ Fixed DATABASE_URL in .env.staging file"
+                    fi
+                fi
             fi
             
             echo "Checking if our new variables were copied correctly..."

@@ -119,57 +119,54 @@ jobs:
             STORE_URL="https://${ENV_NAME}.flowdose.xyz"
           fi
           
-          # Create the environment file with validated values
-          cat > backend/.env.${ENV_NAME} << EOL
-          # Core Settings
-          NODE_ENV=${ENV_NAME}
-          PORT=9000
-          EOL
+          # Write environment file line by line to avoid any quoting/newline issues
+          ENV_FILE="backend/.env.${ENV_NAME}"
+          echo "Writing environment file to $ENV_FILE..."
           
-          # Add DATABASE_URL with explicit quoting to prevent line-wrapping issues
-          echo "DATABASE_URL=\"${DB_URL}\"" >> backend/.env.${ENV_NAME}
-          
-          # Continue with the rest of the environment variables
-          cat >> backend/.env.${ENV_NAME} << EOL
-          
-          # Redis
-          REDIS_URL=${REDIS}
-          CACHE_REDIS_URL=${REDIS}
-          EVENTS_REDIS_URL=${REDIS}
-          
-          # Security
-          JWT_SECRET=${JWT}
-          COOKIE_SECRET=${COOKIE}
-          
-          # CORS Settings
-          ADMIN_CORS=${ADMIN_CORS}
-          STORE_CORS=${STORE_CORS}
-          MEDUSA_ADMIN_CORS=${ADMIN_CORS}
-          MEDUSA_STORE_CORS=${STORE_CORS}
-          
-          # URL Configuration
-          MEDUSA_BACKEND_URL=${BACKEND_URL}
-          API_URL=${BACKEND_URL}
-          
-          # Admin and API Configuration
-          ENABLE_ADMIN=true
-          ENABLE_PUBLISHABLE_API_KEY=true
-          
-          # Admin User
-          MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}
-          MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}
-          
-          # Storefront URL
-          STORE_URL=${STORE_URL}
-          EOL
+          echo "# Core Settings" > $ENV_FILE
+          echo "NODE_ENV=${ENV_NAME}" >> $ENV_FILE
+          echo "PORT=9000" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Database" >> $ENV_FILE
+          echo "DATABASE_URL=${DB_URL}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Redis" >> $ENV_FILE
+          echo "REDIS_URL=${REDIS}" >> $ENV_FILE
+          echo "CACHE_REDIS_URL=${REDIS}" >> $ENV_FILE
+          echo "EVENTS_REDIS_URL=${REDIS}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Security" >> $ENV_FILE
+          echo "JWT_SECRET=${JWT}" >> $ENV_FILE
+          echo "COOKIE_SECRET=${COOKIE}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# CORS Settings" >> $ENV_FILE
+          echo "ADMIN_CORS=${ADMIN_CORS}" >> $ENV_FILE
+          echo "STORE_CORS=${STORE_CORS}" >> $ENV_FILE
+          echo "MEDUSA_ADMIN_CORS=${ADMIN_CORS}" >> $ENV_FILE
+          echo "MEDUSA_STORE_CORS=${STORE_CORS}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# URL Configuration" >> $ENV_FILE
+          echo "MEDUSA_BACKEND_URL=${BACKEND_URL}" >> $ENV_FILE
+          echo "API_URL=${BACKEND_URL}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Admin and API Configuration" >> $ENV_FILE
+          echo "ENABLE_ADMIN=true" >> $ENV_FILE
+          echo "ENABLE_PUBLISHABLE_API_KEY=true" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Admin User" >> $ENV_FILE
+          echo "MEDUSA_ADMIN_EMAIL=${ADMIN_EMAIL}" >> $ENV_FILE
+          echo "MEDUSA_ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> $ENV_FILE
+          echo "" >> $ENV_FILE
+          echo "# Storefront URL" >> $ENV_FILE
+          echo "STORE_URL=${STORE_URL}" >> $ENV_FILE
           
           # Display the generated environment file (with sensitive data masked)
           echo "Generated environment file (sensitive values masked):"
-          cat backend/.env.${ENV_NAME} | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
+          cat $ENV_FILE | sed 's/\(DATABASE_URL=\)[^[:space:]]*/\1****/g' | sed 's/\(JWT_SECRET=\)[^[:space:]]*/\1****/g' | sed 's/\(COOKIE_SECRET=\)[^[:space:]]*/\1****/g'
           
           # Verify DATABASE_URL has the password
-          if grep -q "doadmin:.*@" backend/.env.${ENV_NAME}; then
-            DB_PASSWORD_IN_URL=$(grep "DATABASE_URL" backend/.env.${ENV_NAME} | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+          if grep -q "doadmin:.*@" $ENV_FILE; then
+            DB_PASSWORD_IN_URL=$(grep "DATABASE_URL" $ENV_FILE | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
             echo "✅ DATABASE_URL contains password: ${DB_PASSWORD_IN_URL:0:4}...${DB_PASSWORD_IN_URL: -4} (length: ${#DB_PASSWORD_IN_URL})"
           else
             echo "❌ WARNING: DATABASE_URL is missing a password!"
@@ -177,7 +174,7 @@ jobs:
           
           # Copy to temp location for deployment
           mkdir -p /tmp
-          cp backend/.env.${ENV_NAME} /tmp/backend.env
+          cp $ENV_FILE /tmp/backend.env
       
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.8.0
