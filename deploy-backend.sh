@@ -113,7 +113,10 @@ EOL
     ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << EOF
         # Instead of exporting, directly set DB_PASSWORD to the value from parent shell
         export DB_PASSWORD='${LOCAL_DB_PASSWORD}'
-        export ENV="${ENV:-staging}"
+        # Ensure the ENV is explicitly set with the parent shell value
+        export ENV="${ENV}"
+        
+        echo "DEBUG: ENV value is '\${ENV}'"
         
         # Debug output to confirm password is set correctly
         if [ -n "\$DB_PASSWORD" ]; then
@@ -159,6 +162,16 @@ EOL
             head -n 5 /tmp/backend.env | sed 's/\(PASSWORD=[^[:space:]]*\)/PASSWORD=******/g'
             
             echo "Copying environment file to backend directory..."
+            # Make sure ENV is not empty, default to "staging" if it is
+            if [ -z "\${ENV}" ]; then
+                echo "WARNING: ENV variable is empty! Defaulting to 'staging'"
+                ENV="staging"
+            fi
+            echo "Using environment: \${ENV}"
+            
+            # Ensure target directory exists
+            mkdir -p /root/app/backend
+            
             cp /tmp/backend.env /root/app/backend/.env.\${ENV}
             ln -sf /root/app/backend/.env.\${ENV} /root/app/backend/.env
             echo "Environment file updated."
