@@ -67,11 +67,41 @@ else
         echo "Skipping environment validation - script not found"
     fi
     
+    # IMPORTANT: We need to capture the DB_PASSWORD locally and pass it directly
+    # The issue is that ${DB_PASSWORD} is not being properly expanded inside the heredoc
+    LOCAL_DB_PASSWORD="${DB_PASSWORD}"
+    # Mask display for security, but show length and first/last chars for debugging
+    PASSWORD_START="${LOCAL_DB_PASSWORD:0:4}"
+    PASSWORD_END="${LOCAL_DB_PASSWORD: -4}"
+    PASSWORD_LENGTH="${#LOCAL_DB_PASSWORD}"
+    echo "Local DB_PASSWORD: ${PASSWORD_START}...${PASSWORD_END} (length: ${PASSWORD_LENGTH})"
+    
     # SSH to the backend server and perform deployment
-    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
-        # Export the password from parent shell
-        export DB_PASSWORD="${DB_PASSWORD}"
+    # NOTE: We're using a different technique to ensure DB_PASSWORD gets passed correctly
+    ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS "export SERVER_DB_PASSWORD='${LOCAL_DB_PASSWORD}'; bash -s" << ENDSSH
+        # Use the password we passed in directly
+        export DB_PASSWORD="\${SERVER_DB_PASSWORD}"
+        
+        echo "DEBUG: Received DB_PASSWORD length: \${#DB_PASSWORD}"
         export ENV="${ENV:-staging}"
+        
+        # Display important environment variables for debugging (partially masked)
+        echo "DEBUG: Important variables:"
+        echo "- NODE_ENV: \${ENV}"
+        
+        if [ -n "\${DB_PASSWORD}" ]; then
+            PASSWORD_START=\${DB_PASSWORD:0:4}
+            PASSWORD_END=\${DB_PASSWORD: -4}
+            echo "- DB_PASSWORD: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD})"
+        else
+            echo "- DB_PASSWORD: EMPTY OR UNDEFINED"
+        fi
+        
+        if [ -n "\${MEDUSA_ADMIN_PASSWORD}" ]; then
+            echo "- MEDUSA_ADMIN_PASSWORD length: \${#MEDUSA_ADMIN_PASSWORD}"
+        else
+            echo "- MEDUSA_ADMIN_PASSWORD: EMPTY OR UNDEFINED"
+        fi
         
         # Check if directory exists, if not clone the repository
         if [ ! -d "/root/app/backend" ]; then
@@ -117,7 +147,24 @@ else
             grep -q "MEDUSA_ADMIN_PASSWORD" /root/app/backend/.env && echo "✅ MEDUSA_ADMIN_PASSWORD found in .env" || echo "❌ MEDUSA_ADMIN_PASSWORD not found in .env"
             
             echo "Checking DATABASE_URL in the .env file:"
-            grep "DATABASE_URL" /root/app/backend/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g' || echo "❌ DATABASE_URL not found in .env"
+            if grep -q "DATABASE_URL" /root/app/backend/.env; then
+                DB_URL_LINE=\$(grep "DATABASE_URL" /root/app/backend/.env)
+                echo "Found DATABASE_URL: \${DB_URL_LINE}"
+                
+                # Check if the URL contains a password (showing as doadmin:...)
+                if echo "\${DB_URL_LINE}" | grep -q "doadmin:.*@"; then
+                    # Extract just the password part
+                    DB_PASSWORD_IN_URL=\$(echo "\${DB_URL_LINE}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+                    PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
+                    PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
+                    
+                    echo "✅ DATABASE_URL contains password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
+                else
+                    echo "❌ DATABASE_URL missing password or in wrong format"
+                fi
+            else
+                echo "❌ DATABASE_URL not found in .env"
+            fi
             
             echo "Checking line count and structure of .env file:"
             wc -l /root/app/backend/.env
@@ -134,14 +181,28 @@ else
                 DB_NAME="defaultdb"
                 DB_SSL="sslmode=require"
                 
+                # Show passwords more explicitly for debugging (first/last 4 chars)
+                if [ -n "\${DB_PASSWORD}" ]; then
+                    PASSWORD_START=\${DB_PASSWORD:0:4}
+                    PASSWORD_END=\${DB_PASSWORD: -4}
+                    echo "Using DB_PASSWORD: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD})"
+                else
+                    echo "WARNING: DB_PASSWORD is empty or unset"
+                fi
+                
                 # Update or add the DATABASE_URL with the password from the parent shell
                 grep -v "DATABASE_URL=" /root/app/backend/.env > /root/app/backend/.env.tmp || touch /root/app/backend/.env.tmp
                 echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@\${DB_HOST}:\${DB_PORT}/\${DB_NAME}?\${DB_SSL}" >> /root/app/backend/.env.tmp
                 mv /root/app/backend/.env.tmp /root/app/backend/.env
                 echo "DATABASE_URL updated with password"
                 
-                echo "Updated DATABASE_URL in the .env file:"
-                grep "DATABASE_URL" /root/app/backend/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g'
+                # Show the updated DATABASE_URL with partially masked password
+                DB_URL_LINE=\$(grep "DATABASE_URL" /root/app/backend/.env)
+                # Extract just the password part
+                DB_PASSWORD_IN_URL=\$(echo "\${DB_URL_LINE}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+                PASSWORD_START=\${DB_PASSWORD_IN_URL:0:4}
+                PASSWORD_END=\${DB_PASSWORD_IN_URL: -4}
+                echo "Updated DATABASE_URL with password: \${PASSWORD_START}...\${PASSWORD_END} (length: \${#DB_PASSWORD_IN_URL})"
             fi
         else
             echo "❌ ERROR: /tmp/backend.env file not found!"
@@ -183,6 +244,43 @@ EOF
         echo "Installing dependencies in build directory..."
         cd /root/app/backend/.medusa/server
         yarn install
+        
+        # Test database connection before running migrations
+        echo "Testing database connection..."
+        if [ -f "/root/app/backend/.env" ]; then
+            # Extract DATABASE_URL from .env file
+            TEST_DB_URL=\$(grep "DATABASE_URL" /root/app/backend/.env | cut -d '=' -f 2-)
+            if [ -n "\${TEST_DB_URL}" ]; then
+                echo "Found DATABASE_URL, testing connection..."
+                # Install psql if not present
+                which psql >/dev/null || apt-get update && apt-get install -y postgresql-client
+                
+                # Try to connect
+                export PGPASSWORD=\$(echo "\${TEST_DB_URL}" | sed -n 's/.*doadmin:\([^@]*\)@.*/\1/p')
+                DB_HOST=\$(echo "\${TEST_DB_URL}" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+                DB_PORT=\$(echo "\${TEST_DB_URL}" | sed -n 's/.*:\([^/]*\)\/.*/\1/p')
+                DB_NAME=\$(echo "\${TEST_DB_URL}" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+                
+                echo "Testing connection to \${DB_HOST}:\${DB_PORT} database \${DB_NAME}"
+                echo "Password first 4 chars: \${PGPASSWORD:0:4}..."
+                
+                if psql -h "\${DB_HOST}" -p "\${DB_PORT}" -U "doadmin" -d "\${DB_NAME}" -c "SELECT 1" >/dev/null 2>&1; then
+                    echo "✅ Database connection successful"
+                else
+                    echo "❌ Database connection failed"
+                    echo "Trying to connect without SSL requirements..."
+                    if psql -h "\${DB_HOST}" -p "\${DB_PORT}" -U "doadmin" -d "\${DB_NAME}" -c "SELECT 1" -o /dev/null 2>&1; then
+                        echo "✅ Database connection without SSL successful"
+                    else
+                        echo "❌ Database connection failed even without SSL"
+                    fi
+                fi
+            else
+                echo "DATABASE_URL not found in .env file"
+            fi
+        else
+            echo "No .env file found"
+        fi
         
         # Run database migrations
         echo "Running database migrations..."
