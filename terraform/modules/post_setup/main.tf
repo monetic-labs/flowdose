@@ -41,7 +41,7 @@ resource "null_resource" "setup_backend_server" {
   # Create directory structure
   provisioner "remote-exec" {
     inline = [
-      "mkdir -p /var/www/flowdose/backend",
+      "mkdir -p /root/app/backend",
       "mkdir -p /var/log/flowdose",
       "apt-get update",
       "apt-get install -y nginx git nodejs npm",

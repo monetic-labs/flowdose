@@ -110,23 +110,23 @@ if [ "$CI_MODE" = true ]; then
     PUBLISHABLE_KEY="pk_staging_placeholder_for_ci"
     
     # Show what would be uploaded
-    echo "Would upload environment to $SSH_USER@$BACKEND_IP:/var/www/flowdose/backend/.env"
+    echo "Would upload environment to $SSH_USER@$BACKEND_IP:/root/app/backend/.env"
 else
     # Copy backend .env to server
     echo "Uploading backend environment file to server..."
-    scp -o StrictHostKeyChecking=no backend.env $SSH_USER@$BACKEND_IP:/var/www/flowdose/backend/.env
+    scp -o StrictHostKeyChecking=no backend.env $SSH_USER@$BACKEND_IP:/root/app/backend/.env
     
     # Create publishable key for medusa
     echo "Generating publishable API key..."
     ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP << 'EOF'
-        cd /var/www/flowdose/backend
+        cd /root/app/backend
         MEDUSA_PUBLISHABLE_KEY=$(node scripts/generate-publishable-key.js 2>/dev/null || echo "pk_staging_placeholder")
         echo "Publishable key created: $MEDUSA_PUBLISHABLE_KEY"
         echo "MEDUSA_PUBLISHABLE_KEY=$MEDUSA_PUBLISHABLE_KEY" >> .env
 EOF
     
     # Get the generated publishable key
-    PUBLISHABLE_KEY=$(ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP "grep MEDUSA_PUBLISHABLE_KEY /var/www/flowdose/backend/.env | cut -d= -f2")
+    PUBLISHABLE_KEY=$(ssh -o StrictHostKeyChecking=no $SSH_USER@$BACKEND_IP "grep MEDUSA_PUBLISHABLE_KEY /root/app/backend/.env | cut -d= -f2")
 fi
 
 # Clean up local copy
@@ -159,11 +159,11 @@ if [ "$CI_MODE" = true ]; then
     cp storefront.env ../generated/storefront.env
     
     # Show what would be uploaded
-    echo "Would upload environment to $SSH_USER@$STOREFRONT_IP:/var/www/flowdose/storefront/.env"
+    echo "Would upload environment to $SSH_USER@$STOREFRONT_IP:/root/app/storefront/.env"
 else
     # Copy storefront .env to server
     echo "Uploading storefront environment file to server..."
-    scp -o StrictHostKeyChecking=no storefront.env $SSH_USER@$STOREFRONT_IP:/var/www/flowdose/storefront/.env
+    scp -o StrictHostKeyChecking=no storefront.env $SSH_USER@$STOREFRONT_IP:/root/app/storefront/.env
 fi
 
 # Clean up local copy
