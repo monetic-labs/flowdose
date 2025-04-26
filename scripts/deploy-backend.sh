@@ -346,6 +346,11 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     # Save the PM2 configuration with environment variables
     NODE_ENV=production NODE_TLS_REJECT_UNAUTHORIZED=0 pm2 save
     
+    # Copy the admin panel files to the Nginx directory
+    echo "Copying admin panel files to Nginx directory..."
+    rm -rf /usr/share/nginx/admin/*
+    cp -r /root/app/backend/.medusa/server/public/admin/* /usr/share/nginx/admin/
+    
     # Check if server is responding
     echo "Checking if server is responding..."
     for i in {1..5}; do
