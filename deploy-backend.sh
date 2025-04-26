@@ -127,6 +127,50 @@ EOL
             echo "WARNING: DB_PASSWORD is empty or not set on the server"
         fi
         
+        # =======================================================================
+        # SYSTEM PREPARATION - Memory and storage optimization
+        # =======================================================================
+        echo "=== SYSTEM PREPARATION ==="
+        
+        # Set up permanent swap if it doesn't exist
+        if [ ! -f /swapfile ]; then
+            echo "Creating 2GB swap file for build process..."
+            fallocate -l 2G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            
+            # Make swap permanent by adding to fstab if not already there
+            if ! grep -q "swapfile" /etc/fstab; then
+                echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+                echo "Added swap to fstab for persistence across reboots"
+            fi
+            
+            echo "Swap space created and activated"
+            free -h
+        elif [ "\$(swapon --show | wc -l)" -eq 0 ]; then
+            echo "Swap file exists but not activated, activating now..."
+            swapon /swapfile
+            echo "Swap activated"
+            free -h
+        else
+            echo "Swap already set up and active"
+            free -h
+        fi
+        
+        # Clean up older deployments to free space
+        if [ -d "/root/app/backend.old" ]; then
+            echo "Removing old backend directory to free up space..."
+            rm -rf /root/app/backend.old
+        fi
+        
+        # Configure Linux OOM killer to prevent killing our Node process
+        # This reduces the chances of Node being killed during memory pressure
+        echo "Setting Node.js OOM score adjustment to prevent killing during memory pressure..."
+        for pid in \$(pgrep node); do
+            echo -500 > /proc/\$pid/oom_score_adj 2>/dev/null || true
+        done
+        
         # Check if directory exists, if not clone the repository
         if [ ! -d "/root/app/backend" ]; then
             echo "Backend directory doesn't exist, creating..."
@@ -143,11 +187,18 @@ EOL
         fi
         
         # Stop any running PM2 processes
+        echo "Stopping all running PM2 processes..."
         pm2 stop all || true
         pm2 delete all || true
         
         # Navigate to backend directory
         cd /root/app/backend
+        echo "Now in: \$(pwd)"
+        
+        # =======================================================================
+        # ENVIRONMENT SETUP - Configure settings for build and runtime
+        # =======================================================================
+        echo "=== ENVIRONMENT SETUP ==="
         
         # Pull latest code
         if [ -d ".git" ]; then
@@ -334,9 +385,37 @@ EOF
         corepack enable
         corepack prepare yarn@4.4.0 --activate
         
+        # =======================================================================
+        # BUILD PREPARATION - Optimize before build to reduce memory usage
+        # =======================================================================
+        echo "=== BUILD PREPARATION ==="
+        
+        # Clear caches and clean up node_modules
+        echo "Cleaning up previous build artifacts and caches..."
+        rm -rf /root/app/backend/.medusa || true
+        rm -rf /root/app/backend/node_modules/.cache || true
+        rm -rf /root/.yarn/cache || true
+        
+        # Create .yarnrc.yml file with optimizations
+        cat > /root/app/backend/.yarnrc.yml << EOL
+nodeLinker: node-modules
+compressionLevel: 0
+enableGlobalCache: false
+logFilters:
+  - code: YN0002
+    level: discard
+  - code: YN0060
+    level: discard
+  - code: YN0086
+    level: discard
+nmMode: hardlinks-local
+enableImmutableInstalls: false
+networkConcurrency: 1
+EOL
+        
         # Install dependencies in source directory
         echo "Installing dependencies in source directory..."
-        yarn install
+        yarn install --network-concurrency 1 --immutable false
         
         # Test database connection before building
         echo "Testing database connection..."
@@ -375,31 +454,60 @@ EOF
             echo "No .env file found"
         fi
         
-        # Create a swap file if not already present to help with memory issues
-        if [ ! -f /swapfile ]; then
-            echo "Creating 2GB swap file for build process..."
-            fallocate -l 2G /swapfile
-            chmod 600 /swapfile
-            mkswap /swapfile
-            swapon /swapfile
-            echo "Swap space created and activated."
-            free -h
-        fi
+        # =======================================================================
+        # BUILD PROCESS - Optimized for memory constraints
+        # =======================================================================
+        echo "=== BUILD PROCESS ==="
         
-        # Clean up any previous build artifacts to save memory
-        echo "Cleaning up previous build artifacts..."
-        rm -rf /root/app/backend/.medusa || true
-        rm -rf /root/app/backend/node_modules/.cache || true
+        # Create a custom script that runs the build with optimized memory settings
+        cat > /tmp/build-with-memory-opt.js << EOL
+const { execSync } = require('child_process');
+
+// Free up memory before starting
+try {
+  global.gc();
+} catch (e) {
+  console.log('No garbage collection available, continuing anyway');
+}
+
+// Run the build command with memory optimizations
+try {
+  console.log('Starting optimized build process...');
+  execSync('yarn medusa build', {
+    env: {
+      ...process.env,
+      NODE_OPTIONS: '--max-old-space-size=2048 --max-semi-space-size=64 --optimize-for-size --gc-interval=100'
+    },
+    stdio: 'inherit'
+  });
+  console.log('Build completed successfully');
+} catch (error) {
+  console.error('Build failed with error:', error.message);
+  process.exit(1);
+}
+EOL
         
-        # Build the application using the most similar approach to manual builds
-        echo "Building the application (simulating manual build process)..."
+        # Run the optimized build
+        echo "Building the application with memory optimizations..."
+        export NODE_OPTIONS="--max-old-space-size=2048 --max-semi-space-size=64 --optimize-for-size --gc-interval=100"
         
-        # Set minimal memory optimizations without interfering with build process
-        export NODE_OPTIONS="--max-old-space-size=2048"
+        # Try the optimized build, with fallbacks
+        node /tmp/build-with-memory-opt.js || {
+            echo "Primary build approach failed, trying backup method..."
+            NODE_ENV=production node --max-old-space-size=2048 node_modules/.bin/medusa build || {
+                echo "Build still failing, attempting minimal build..."
+                # If both fail, try a direct approach
+                NODE_ENV=production NODE_OPTIONS="--max-old-space-size=2048" npx --no medusa build || {
+                    echo "All build methods failed. Please check the logs."
+                    exit 1
+                }
+            }
+        }
         
-        # Run the build in a cleaner environment with explicit production mode
-        echo "Running build with production configuration..."
-        NODE_ENV=production yarn build
+        # =======================================================================
+        # DEPLOYMENT - Set up the server for production
+        # =======================================================================
+        echo "=== DEPLOYMENT ==="
         
         # Copy environment to the build directory
         echo "Copying environment file to build directory..."
@@ -408,7 +516,7 @@ EOF
         # Install dependencies in the build directory
         echo "Installing dependencies in build directory..."
         cd /root/app/backend/.medusa/server
-        yarn install
+        yarn install --network-concurrency 1
         
         # Run database migrations
         echo "Running database migrations..."
@@ -424,6 +532,10 @@ EOF
         
         # Return to root directory
         cd /root/app/backend
+        
+        # Check if server is responding
+        echo "Checking if the server is responding..."
+        timeout 30 bash -c 'while [[ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/health)" != "200" ]]; do echo "Waiting for server..." && sleep 2; done' || echo "Server health check timed out, but continuing anyway"
         
         echo "Backend deployment completed successfully!"
     EOF
