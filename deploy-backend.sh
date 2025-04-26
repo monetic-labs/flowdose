@@ -375,8 +375,9 @@ EOF
             echo "No .env file found"
         fi
         
-        # Build the application
-        echo "Building the application..."
+        # Build the application with increased Node.js memory limit
+        echo "Building the application with increased memory limit..."
+        export NODE_OPTIONS="--max-old-space-size=8192"
         yarn build
         
         # Copy environment to the build directory
