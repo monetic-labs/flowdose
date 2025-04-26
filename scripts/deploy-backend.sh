@@ -301,6 +301,9 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     # Build the application
     echo "Building application..."
     yarn build
+
+    echo "Setting Node.js memory limit..."
+    export NODE_OPTIONS="--max-old-space-size=4096"
     
     # Run database migrations with fallback options
     echo "Running database migrations..."
