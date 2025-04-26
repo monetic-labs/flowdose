@@ -375,10 +375,31 @@ EOF
             echo "No .env file found"
         fi
         
-        # Build the application with increased Node.js memory limit
-        echo "Building the application with increased memory limit..."
-        export NODE_OPTIONS="--max-old-space-size=8192"
-        yarn build
+        # Create a swap file if not already present to help with memory issues
+        if [ ! -f /swapfile ]; then
+            echo "Creating 2GB swap file for build process..."
+            fallocate -l 2G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo "Swap space created and activated."
+            free -h
+        fi
+        
+        # Clean up any previous build artifacts to save memory
+        echo "Cleaning up previous build artifacts..."
+        rm -rf /root/app/backend/.medusa || true
+        rm -rf /root/app/backend/node_modules/.cache || true
+        
+        # Build the application using the most similar approach to manual builds
+        echo "Building the application (simulating manual build process)..."
+        
+        # Set minimal memory optimizations without interfering with build process
+        export NODE_OPTIONS="--max-old-space-size=2048"
+        
+        # Run the build in a cleaner environment with explicit production mode
+        echo "Running build with production configuration..."
+        NODE_ENV=production yarn build
         
         # Copy environment to the build directory
         echo "Copying environment file to build directory..."
