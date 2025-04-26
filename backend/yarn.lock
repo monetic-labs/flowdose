@@ -2439,7 +2439,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@medusajs/event-bus-redis@npm:2.7.1":
+"@medusajs/event-bus-redis@npm:2.7.1, @medusajs/event-bus-redis@npm:^2.7.1":
   version: 2.7.1
   resolution: "@medusajs/event-bus-redis@npm:2.7.1"
   dependencies:
@@ -2449,19 +2449,6 @@ __metadata:
     "@medusajs/framework": 2.7.1
     awilix: ^8.0.1
   checksum: 10c0/daea4520b7113fd0d82845a33edc4042f9fbb50d02c5b921a45d9e6bdc69b5f889be93d36e249292295e70384ffd9a778e692f02a008a320e749b834d2f8cfea
-  languageName: node
-  linkType: hard
-
-"@medusajs/event-bus-redis@npm:^2.7.0":
-  version: 2.7.0
-  resolution: "@medusajs/event-bus-redis@npm:2.7.0"
-  dependencies:
-    bullmq: "npm:5.13.0"
-    ioredis: "npm:^5.4.1"
-  peerDependencies:
-    "@medusajs/framework": 2.7.0
-    awilix: ^8.0.1
-  checksum: 10c0/552cfd3c0997c1e8e3f4d587ebdf1a238cb385f88d14c99e4d58fa5029a8ead1e03383564cc6e231565c8e62185e41afa7f8f51ede842ada66b6ab1d06cae299
   languageName: node
   linkType: hard
 
@@ -12342,7 +12329,7 @@ __metadata:
   dependencies:
     "@medusajs/admin-sdk": "npm:^2.7.1"
     "@medusajs/cli": "npm:^2.7.1"
-    "@medusajs/event-bus-redis": "npm:^2.7.0"
+    "@medusajs/event-bus-redis": "npm:^2.7.1"
     "@medusajs/framework": "npm:^2.7.1"
     "@medusajs/js-sdk": "npm:^2.7.1"
     "@medusajs/medusa": "npm:^2.7.1"

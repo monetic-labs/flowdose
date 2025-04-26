@@ -24,7 +24,7 @@
   "dependencies": {
     "@medusajs/admin-sdk": "^2.7.1",
     "@medusajs/cli": "^2.7.1",
-    "@medusajs/event-bus-redis": "^2.7.0",
+    "@medusajs/event-bus-redis": "^2.7.1",
     "@medusajs/framework": "^2.7.1",
     "@medusajs/js-sdk": "^2.7.1",
     "@medusajs/medusa": "^2.7.1",
