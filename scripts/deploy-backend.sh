@@ -351,6 +351,125 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     rm -rf /usr/share/nginx/admin/*
     cp -r /root/app/backend/.medusa/server/public/admin/* /usr/share/nginx/admin/
     
+    # Ensure admin user exists and has the correct password from environment variables
+    echo "Ensuring admin user exists with correct credentials..."
+    cat > /tmp/create-admin-user.js << 'EOF'
+const { createConnection } = require('typeorm');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+async function ensureAdminUser() {
+  try {
+    // Get admin credentials from environment
+    const adminEmail = process.env.MEDUSA_ADMIN_EMAIL || 'admin@flowdose.xyz';
+    const adminPassword = process.env.MEDUSA_ADMIN_PASSWORD || 'secretpassword';
+    
+    console.log(`Ensuring admin user exists: ${adminEmail}`);
+    
+    // Connect to database
+    const connection = await createConnection({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      entities: [],
+    });
+    
+    // Check if user exists
+    const userResult = await connection.query(
+      'SELECT id FROM "user" WHERE email = $1',
+      [adminEmail]
+    );
+    
+    let userId;
+    
+    // If user doesn't exist, create it
+    if (userResult.length === 0) {
+      console.log('Creating new admin user');
+      userId = `user_${crypto.randomUUID().replace(/-/g, '')}`;
+      await connection.query(
+        'INSERT INTO "user" (id, email, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())',
+        [userId, adminEmail]
+      );
+    } else {
+      userId = userResult[0].id;
+      console.log('Admin user exists with ID:', userId);
+    }
+    
+    // Generate password hash
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(adminPassword, salt);
+    const scryptPassword = `scrypt\x00\x0f\x00\x00\x00\x08\x00\x00\x00${crypto.randomBytes(32)}`
+      .toString('base64');
+    
+    // Check if auth identity exists
+    const authResult = await connection.query(
+      'SELECT id FROM auth_identity WHERE app_metadata->>\'user_id\' = $1',
+      [userId]
+    );
+    
+    let authId;
+    
+    // If auth identity doesn't exist, create it
+    if (authResult.length === 0) {
+      console.log('Creating new auth identity for user');
+      authId = `authid_${crypto.randomUUID().replace(/-/g, '')}`;
+      await connection.query(
+        'INSERT INTO auth_identity (id, app_metadata, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())',
+        [authId, JSON.stringify({ user_id: userId })]
+      );
+    } else {
+      authId = authResult[0].id;
+      console.log('Auth identity exists with ID:', authId);
+    }
+    
+    // Check if provider identity exists
+    const providerResult = await connection.query(
+      'SELECT id FROM provider_identity WHERE auth_identity_id = $1 AND provider = $2',
+      [authId, 'emailpass']
+    );
+    
+    // If provider identity doesn't exist, create it; otherwise update it
+    if (providerResult.length === 0) {
+      console.log('Creating new provider identity');
+      const providerId = crypto.randomUUID().replace(/-/g, '');
+      await connection.query(
+        'INSERT INTO provider_identity (id, entity_id, provider, auth_identity_id, provider_metadata, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())',
+        [providerId, adminEmail, 'emailpass', authId, JSON.stringify({ password: scryptPassword })]
+      );
+    } else {
+      console.log('Updating existing provider identity');
+      await connection.query(
+        'UPDATE provider_identity SET provider_metadata = $1 WHERE auth_identity_id = $2 AND provider = $3',
+        [JSON.stringify({ password: scryptPassword }), authId, 'emailpass']
+      );
+    }
+    
+    console.log('Admin user setup completed successfully');
+    await connection.close();
+    return true;
+  } catch (error) {
+    console.error('Error ensuring admin user:', error);
+    return false;
+  }
+}
+
+// Execute the function
+ensureAdminUser()
+  .then(success => process.exit(success ? 0 : 1))
+  .catch(err => {
+    console.error('Unhandled error:', err);
+    process.exit(1);
+  });
+EOF
+
+    # Run the script with environment variables
+    echo "Running admin user setup script..."
+    cd /root/app/backend/.medusa/server && \
+    NODE_ENV=production NODE_TLS_REJECT_UNAUTHORIZED=0 \
+    DATABASE_URL=$(grep DATABASE_URL /root/app/backend/.env | cut -d= -f2-) \
+    MEDUSA_ADMIN_EMAIL=$(grep MEDUSA_ADMIN_EMAIL /root/app/backend/.env | cut -d= -f2-) \
+    MEDUSA_ADMIN_PASSWORD=$(grep MEDUSA_ADMIN_PASSWORD /root/app/backend/.env | cut -d= -f2-) \
+    node /tmp/create-admin-user.js || echo "Admin user setup failed, but continuing deployment"
+    
     # Check if server is responding
     echo "Checking if server is responding..."
     for i in {1..5}; do
