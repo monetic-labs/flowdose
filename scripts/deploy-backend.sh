@@ -303,6 +303,18 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     echo "Installing dependencies..."
     yarn install
     
+    # Ensure the build directory exists before building
+    echo "Creating build directory..."
+    mkdir -p /root/app/backend/.medusa/server
+
+    # Copy environment file to build directory early
+    echo "Copying environment file to build directory..."
+    cp /root/app/backend/.env /root/app/backend/.medusa/server/.env
+    cp /root/app/backend/.env /root/app/backend/.medusa/server/.env.production
+
+    # Verify files were copied
+    ls -la /root/app/backend/.medusa/server/.env*
+    
     # Build the application
     echo "Building application..."
     yarn build
