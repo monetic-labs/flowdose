@@ -509,14 +509,49 @@ EOL
         # =======================================================================
         echo "=== DEPLOYMENT ==="
         
-        # Copy environment to the build directory
+        # Create the build directory if it doesn't exist
+        echo "Ensuring build directory exists..."
+        mkdir -p /root/app/backend/.medusa/server
+
+        # Copy environment to the build directory with verification
         echo "Copying environment file to build directory..."
         cp /root/app/backend/.env /root/app/backend/.medusa/server/.env.production
-        
-        # Install dependencies in the build directory
+        if [ -f "/root/app/backend/.medusa/server/.env.production" ]; then
+            echo "✅ Environment file successfully copied to build directory"
+        else
+            echo "⚠️ Environment file copy failed, creating directly..."
+            # Create it directly as a backup method
+            cp /tmp/backend.env /root/app/backend/.medusa/server/.env.production
+        fi
+
+        # Additional development environment file for safety
+        cp /root/app/backend/.medusa/server/.env.production /root/app/backend/.medusa/server/.env
+
+        # Verify environment files in build directory
+        echo "Verifying environment files in build directory:"
+        ls -la /root/app/backend/.medusa/server/.env* || echo "No environment files found!"
+
+        # Install dependencies in the build directory with fallback mechanisms
         echo "Installing dependencies in build directory..."
         cd /root/app/backend/.medusa/server
-        yarn install
+
+        # Try yarn first, but fallback to npm if it fails
+        echo "Trying yarn install first..."
+        if ! yarn install; then
+            echo "Yarn install failed, trying npm install with legacy-peer-deps..."
+            npm install --legacy-peer-deps
+        fi
+
+        # Verify node_modules exists
+        if [ -d "node_modules" ]; then
+            echo "✅ Dependencies installed successfully"
+            ls -la node_modules | head -5
+        else
+            echo "❌ Failed to install dependencies"
+            # Emergency fallback - try copying the node_modules from the source dir
+            echo "Emergency fallback: Copying node_modules from source directory..."
+            cp -r /root/app/backend/node_modules .
+        fi
         
         # Run database migrations
         echo "Running database migrations..."
