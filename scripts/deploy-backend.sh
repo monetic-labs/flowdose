@@ -307,56 +307,6 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
     echo "Creating build directory..."
     mkdir -p /root/app/backend/.medusa/server
 
-    # Enhanced environment file copying with better error handling
-    echo "Setting up environment files in build directory..."
-    
-    # First check if source env files exist
-    if [ ! -f "/root/app/backend/.env" ]; then
-        echo "⚠️ WARNING: Source .env file not found in /root/app/backend/"
-        
-        # Emergency fallback - create a minimal .env file with critical variables
-        echo "Creating minimal .env file in backend directory..."
-        cat > /root/app/backend/.env << EOFENV
-NODE_ENV=production
-DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require
-REDIS_URL=rediss://default:${REDIS_PASSWORD:-placeholder}@redis-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25061
-NODE_TLS_REJECT_UNAUTHORIZED=0
-EOFENV
-        echo "✅ Minimal .env file created"
-    else
-        echo "✅ Source .env file found in /root/app/backend/"
-    fi
-
-    # Copy environment files with verification
-    echo "Copying environment files to build directory..."
-    cp -v /root/app/backend/.env /root/app/backend/.medusa/server/.env
-    cp -v /root/app/backend/.env /root/app/backend/.medusa/server/.env.production
-    
-    # Ensure NODE_TLS_REJECT_UNAUTHORIZED is set in both files
-    echo "Ensuring SSL validation is disabled in environment files..."
-    grep -q "NODE_TLS_REJECT_UNAUTHORIZED=0" /root/app/backend/.medusa/server/.env || 
-        echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> /root/app/backend/.medusa/server/.env
-    grep -q "NODE_TLS_REJECT_UNAUTHORIZED=0" /root/app/backend/.medusa/server/.env.production || 
-        echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> /root/app/backend/.medusa/server/.env.production
-
-    # Verify DATABASE_URL in the copied files
-    echo "Verifying DATABASE_URL in build directory environment files..."
-    if grep -q "DATABASE_URL" /root/app/backend/.medusa/server/.env; then
-        DB_URL=\$(grep "DATABASE_URL" /root/app/backend/.medusa/server/.env | sed 's/doadmin:[^@]*@/doadmin:****@/g')
-        echo "✅ DATABASE_URL found in .env: \$DB_URL"
-    else
-        echo "⚠️ WARNING: DATABASE_URL not found in .medusa/server/.env"
-        echo "DATABASE_URL=postgresql://doadmin:${DB_PASSWORD}@postgres-flowdose-staging-0423-do-user-17309531-0.f.db.ondigitalocean.com:25060/defaultdb?sslmode=require" >> /root/app/backend/.medusa/server/.env
-        echo "✅ Added DATABASE_URL to .env"
-    fi
-
-    # Verify files were copied successfully
-    echo "Verifying environment files in build directory:"
-    ls -la /root/app/backend/.medusa/server/.env*
-    
-    echo "Environment file content (sensitive data masked):"
-    cat /root/app/backend/.medusa/server/.env | grep -v PASSWORD | grep -v SECRET | head -10
-
     # Build the application
     echo "Building application..."
     yarn build
@@ -368,6 +318,25 @@ EOFENV
     echo "Running database migrations..."
     export NODE_TLS_REJECT_UNAUTHORIZED=0
     yarn medusa db:migrate || echo "Migration failed, but continuing deployment"
+    
+    # CRITICAL: Copy environment files AFTER build to ensure they don't get overwritten
+    echo "Copying environment files to build directory..."
+    cp /root/app/backend/.env /root/app/backend/.medusa/server/.env
+    cp /root/app/backend/.env /root/app/backend/.medusa/server/.env.production
+    
+    # Ensure SSL validation is disabled
+    grep -q "NODE_TLS_REJECT_UNAUTHORIZED=0" /root/app/backend/.medusa/server/.env || 
+        echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> /root/app/backend/.medusa/server/.env
+    grep -q "NODE_TLS_REJECT_UNAUTHORIZED=0" /root/app/backend/.medusa/server/.env.production || 
+        echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> /root/app/backend/.medusa/server/.env.production
+    
+    # Verify environment files were copied
+    echo "Verifying environment files:"
+    ls -la /root/app/backend/.medusa/server/.env*
+    
+    # CRITICAL: Install dependencies in the server directory
+    echo "Installing dependencies in the server directory..."
+    cd /root/app/backend/.medusa/server && yarn install
     
     # Start the application with PM2 from the build directory with explicit environment variables
     echo "Starting application with PM2 from build directory..."
