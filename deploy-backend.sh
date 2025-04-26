@@ -415,7 +415,7 @@ EOL
         
         # Install dependencies in source directory
         echo "Installing dependencies in source directory..."
-        yarn install --network-concurrency 1 --immutable false
+        yarn install
         
         # Test database connection before building
         echo "Testing database connection..."
@@ -516,7 +516,7 @@ EOL
         # Install dependencies in the build directory
         echo "Installing dependencies in build directory..."
         cd /root/app/backend/.medusa/server
-        yarn install --network-concurrency 1
+        yarn install
         
         # Run database migrations
         echo "Running database migrations..."
