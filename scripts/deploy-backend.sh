@@ -289,6 +289,11 @@ ssh -o StrictHostKeyChecking=no $SSH_USER@$IP_ADDRESS << ENDSSH
         exit 1
     fi
     
+    # Add CORS settings for cross-domain auth
+    echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> /root/app/backend/.env
+    echo "ADMIN_CORS=https://admin-staging.flowdose.xyz" >> /root/app/backend/.env
+    echo "MEDUSA_ADMIN_CORS=https://admin-staging.flowdose.xyz" >> /root/app/backend/.env
+    
     # Enable Corepack for Yarn 4
     echo "Enabling Corepack for Yarn 4..."
     corepack enable
