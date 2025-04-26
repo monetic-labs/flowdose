@@ -74,6 +74,14 @@ module.exports = defineConfig({
     [APPROVAL_MODULE]: {
       resolve: "./modules/approval",
     },
+    [Modules.STOCK_LOCATION]: {
+      resolve: "@medusajs/stock-location",
+      options: {
+        database: {
+          clientUrl: process.env.DATABASE_URL,
+        },
+      },
+    },
     [Modules.CACHE]: {
       resolve: "@medusajs/medusa/cache-redis",
       options: {
