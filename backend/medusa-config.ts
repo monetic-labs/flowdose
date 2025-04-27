@@ -63,6 +63,15 @@ module.exports = defineConfig({
         },
       },
     },
+    {
+      resolve: `medusa-plugin-resend`,
+      options: {
+        api_key: process.env.RESEND_API_KEY,
+        from: process.env.RESEND_FROM,
+        // Optional: enable template sending
+        // template_path: 'path/to/templates',
+      },
+    },
   ],
   modules: {
     [COMPANY_MODULE]: {
