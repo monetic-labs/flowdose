@@ -26,77 +26,33 @@ echo "App Directory: $APP_DIR"
 # Execute the build commands on the remote server
 echo "Starting build process..."
 BUILD_RESULT=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" "$SSH_USER@$SERVER_IP" <<EOF
-# Set variables
-ENVIRONMENT="$ENVIRONMENT"
-APP_DIR="$APP_DIR"
-NODE_ENV="$ENVIRONMENT"
-export NODE_ENV
+set -x # Enable debugging for remote commands
+cd "${APP_DIR}/backend"
 
-cd \${APP_DIR}/backend || exit 1
-echo "Current directory: \$(pwd)"
+echo "Running yarn install..."
+yarn install --frozen-lockfile || yarn install --check-files # Added fallback
 
-# Verify .env file exists
-if [ ! -f ".env" ]; then
-  echo "ERROR: .env file not found in backend directory"
+echo "Running medusa build..."
+export NODE_ENV="$ENVIRONMENT"
+# Use npx to ensure local medusa CLI is used
+npx medusa build
+
+# Copy .env file to build output directory
+echo "Copying .env to build directory..."
+if [ -f "${APP_DIR}/backend/.env" ]; then
+  if [ -d "${APP_DIR}/backend/.medusa/server" ]; then
+    cp "${APP_DIR}/backend/.env" "${APP_DIR}/backend/.medusa/server/.env"
+    echo ".env file copied successfully."
+  else
+    echo "ERROR: Build output directory .medusa/server not found after build."
+    exit 1
+  fi
+else
+  echo "ERROR: Source .env file not found in ${APP_DIR}/backend/.env"
   exit 1
 fi
 
-# Set Node.js memory limit for the build
-export NODE_OPTIONS="--max-old-space-size=8192"
-
-# Enable Corepack for Yarn version management
-echo "Setting up Corepack for Yarn version management..."
-corepack enable
-corepack prepare yarn@4.4.0 --activate
-
-# Install dependencies
-echo "Installing dependencies..."
-yarn install
-if [ \$? -ne 0 ]; then
-  echo "ERROR: Failed to install dependencies"
-  exit 1
-fi
-
-# Show installed packages
-echo "Yarn version: \$(yarn -v)"
-echo "Node version: \$(node -v)"
-
-# Build the application
-echo "Building application..."
-yarn build
-if [ \$? -ne 0 ]; then
-  echo "ERROR: Build failed"
-  exit 1
-fi
-
-# Verify build output directory exists
-if [ ! -d ".medusa/server" ]; then
-  echo "ERROR: Build directory .medusa/server not found"
-  exit 1
-fi
-
-# Ensure the environment file is copied to the server directory
-echo "Copying environment file to server directory..."
-cp .env .medusa/server/.env
-cp .env .medusa/server/.env.\$ENVIRONMENT
-
-# Install dependencies in the build directory
-echo "Installing dependencies in the build directory..."
-cd .medusa/server
-yarn install
-if [ \$? -ne 0 ]; then
-  echo "ERROR: Failed to install dependencies in the build directory"
-  exit 1
-fi
-
-# Run migrations
-echo "Running database migrations..."
-NODE_TLS_REJECT_UNAUTHORIZED=0 yarn medusa migrations run
-if [ \$? -ne 0 ]; then
-  echo "WARNING: Migration failed, continuing anyway"
-fi
-
-echo "Build and installation completed successfully."
+echo "Build process completed."
 exit 0
 EOF
 )

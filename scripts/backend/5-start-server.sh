@@ -60,25 +60,23 @@ module.exports = {
   apps: [
     {
       name: "medusa-server",
-      script: "yarn",
-      args: "medusa develop",
+      script: "npx",
+      args: "medusa start",
       cwd: "${APP_DIR}/backend/.medusa/server",
       env: {
         NODE_ENV: "${ENVIRONMENT}",
         NODE_TLS_REJECT_UNAUTHORIZED: "0",
-        MEDUSA_WORKER_MODE: "server",
         MEDUSA_ADMIN_API_URL: "http://localhost:9000/admin"
       }
     },
     {
       name: "medusa-worker",
-      script: "yarn",
-      args: "medusa develop",
+      script: "npx",
+      args: "medusa start",
       cwd: "${APP_DIR}/backend/.medusa/server",
       env: {
         NODE_ENV: "${ENVIRONMENT}",
-        NODE_TLS_REJECT_UNAUTHORIZED: "0",
-        MEDUSA_WORKER_MODE: "worker"
+        NODE_TLS_REJECT_UNAUTHORIZED: "0"
       }
     }
   ]
