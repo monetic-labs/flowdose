@@ -35,7 +35,14 @@ yarn install --frozen-lockfile || yarn install --check-files # Added fallback
 echo "Running medusa build..."
 export NODE_ENV="$ENVIRONMENT"
 # Use npx to ensure local medusa CLI is used
-npx medusa build
+npx medusa build --verbose
+
+# === ADDED STEPS START ===
+echo "Installing dependencies in build directory..."
+cd "${APP_DIR}/backend/.medusa/server"
+yarn install --production --check-files || yarn install --production # Added fallback and --production flag
+cd "${APP_DIR}/backend" # Go back to original directory
+# === ADDED STEPS END ===
 
 # Copy .env file to build output directory
 echo "Copying .env to build directory..."

@@ -59,6 +59,11 @@ fi
 echo "Clone successful. Directory contents:"
 ls -la \${APP_DIR}/temp-repo
 
+# === ADDED CHECK START ===
+echo "Checking subscribers directory in temp clone:"
+ls -la \${APP_DIR}/temp-repo/backend/src/subscribers/ || echo "Subscribers directory not found in temp clone."
+# === ADDED CHECK END ===
+
 # Check if backend directory exists in the repo
 if [ ! -d "\${APP_DIR}/temp-repo/backend" ]; then
   echo "ERROR: Backend directory not found in cloned repository"
