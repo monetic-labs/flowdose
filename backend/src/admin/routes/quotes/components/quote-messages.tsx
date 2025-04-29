@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AdminOrderPreview } from "@medusajs/framework/types";
+import { AdminOrderPreview, AdminOrderLineItem } from "@medusajs/framework/types";
 import {
   Button,
   clx,
@@ -106,7 +106,7 @@ export function QuoteMessages({
               <div className="border border-dashed border-neutral-400 my-2">
                 <QuoteItem
                   item={previewItemsMap.get(message.item_id)!}
-                  originalItem={originalItemsMap.get(message.item_id)!}
+                  originalItem={originalItemsMap.get(message.item_id)! as AdminOrderLineItem}
                   currencyCode={quote.draft_order.currency_code}
                 />
               </div>
@@ -124,6 +124,7 @@ export function QuoteMessages({
               control={form.control}
               name="item_id"
               render={({ field: { onChange, ref, ...field } }) => {
+                const selectValue = field.value ?? undefined;
                 return (
                   <Form.Item>
                     <div className="flex items-center gap-3">
@@ -135,7 +136,7 @@ export function QuoteMessages({
                       </div>
                       <div className="flex-1">
                         <Form.Control>
-                          <Select onValueChange={onChange} {...field}>
+                          <Select onValueChange={onChange} {...field} value={selectValue}>
                             <Select.Trigger className="bg-ui-bg-base" ref={ref}>
                               <Select.Value placeholder="Select Item" />
                             </Select.Trigger>

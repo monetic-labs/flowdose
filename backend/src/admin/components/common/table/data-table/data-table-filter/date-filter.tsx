@@ -6,7 +6,6 @@ import { useMemo, useState } from "react"
 
 import { t } from "i18next"
 import { useTranslation } from "react-i18next"
-import { useDate } from "../../../../hooks/use-date"
 import { useSelectedParams } from "../hooks"
 import { useDataTableFilterContext } from "./context"
 import FilterChip from "./filter-chip"
@@ -41,8 +40,6 @@ export const DateFilter = ({
 }: DateFilterProps) => {
   const [open, setOpen] = useState(openOnMount)
   const [showCustom, setShowCustom] = useState(false)
-
-  const { getFullDate } = useDate()
 
   const { key, label } = filter
 
@@ -85,7 +82,7 @@ export const DateFilter = ({
   }
 
   const formatCustomDate = (date: Date | undefined) => {
-    return date ? getFullDate({ date: date }) : undefined
+    return date ? date.toLocaleDateString() : undefined
   }
 
   const getCustomDisplayValue = () => {
@@ -140,7 +137,7 @@ export const DateFilter = ({
             sideOffset={8}
             collisionPadding={24}
             className={clx(
-              "bg-ui-bg-base text-ui-fg-base shadow-elevation-flyout h-full max-h-[var(--radix-popper-available-height)] w-[300px] overflow-auto rounded-lg"
+              "bg-ui-bg-base text-ui-fg-base shadow-elevation-flyout h-full max-h-[var(--radix-popover-available-height)] w-[300px] overflow-auto rounded-lg"
             )}
             onInteractOutside={(e) => {
               if (e.target instanceof HTMLElement) {

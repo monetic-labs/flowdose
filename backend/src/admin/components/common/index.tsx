@@ -1,10 +1,6 @@
 import { Disclosure } from "@headlessui/react";
-import { Badge, clx } from "@medusajs/ui";
-import Button from "@/modules/common/components/button";
-import { useEffect } from "react";
-
-import useToggleState from "@/lib/hooks/use-toggle-state";
-import { useFormStatus } from "react-dom";
+import { Badge, Button, clx } from "@medusajs/ui";
+import React, { useEffect, useState } from "react";
 
 type AccountInfoProps = {
   label: string;
@@ -15,6 +11,7 @@ type AccountInfoProps = {
   clearState: () => void;
   children?: React.ReactNode;
   "data-testid"?: string;
+  isLoading?: boolean;
 };
 
 const AccountInfo = ({
@@ -26,10 +23,11 @@ const AccountInfo = ({
   errorMessage = "An error occurred, please try again",
   children,
   "data-testid": dataTestid,
+  isLoading,
 }: AccountInfoProps) => {
-  const { state, close, toggle } = useToggleState();
-
-  const { pending } = useFormStatus();
+  const [state, setState] = useState(false);
+  const toggle = () => setState((prev) => !prev);
+  const close = () => setState(false);
 
   const handleToggle = () => {
     clearState();
@@ -124,7 +122,7 @@ const AccountInfo = ({
             <div>{children}</div>
             <div className="flex items-center justify-end mt-2">
               <Button
-                isLoading={pending}
+                isLoading={isLoading}
                 className="w-full small:max-w-[140px]"
                 type="submit"
                 data-testid="save-button"

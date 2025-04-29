@@ -122,6 +122,9 @@ const QuoteDetails = () => {
     throw "preview not found";
   }
 
+  // Cast customer to access potentially expanded relations not in the base type
+  const customer = quote.draft_order?.customer as any;
+
   return (
     <div className="flex flex-col gap-y-3">
       <div className="flex flex-col gap-x-4 lg:flex-row xl:items-start">
@@ -195,10 +198,10 @@ const QuoteDetails = () => {
 
               <Link
                 className="text-sm text-pretty text-blue-500"
-                to={`/customers/${quote.draft_order?.customer?.id}`}
+                to={`/customers/${customer?.id}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                {quote.draft_order?.customer?.email}
+                {customer?.email}
               </Link>
             </div>
 
@@ -208,7 +211,7 @@ const QuoteDetails = () => {
               </Text>
 
               <Text size="small" leading="compact" className="text-pretty">
-                {quote.draft_order?.customer?.phone}
+                {customer?.phone}
               </Text>
             </div>
 
@@ -219,8 +222,8 @@ const QuoteDetails = () => {
 
               <Text size="small" leading="compact" className="text-pretty">
                 {formatAmount(
-                  quote.draft_order?.customer?.employee.spending_limit,
-                  quote.draft_order?.customer?.employee?.company?.currency_code
+                  customer?.employee?.spending_limit,
+                  customer?.employee?.company?.currency_code
                 )}
               </Text>
             </div>
@@ -238,10 +241,10 @@ const QuoteDetails = () => {
 
               <Link
                 className="text-sm text-pretty text-blue-500"
-                to={`/companies/${quote.draft_order?.customer?.employee?.company.id}`}
+                to={`/companies/${customer?.employee?.company?.id}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                {quote.draft_order?.customer?.employee?.company?.name}
+                {customer?.employee?.company?.name}
               </Link>
             </div>
           </Container>
