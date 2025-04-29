@@ -98,7 +98,7 @@ export const QuoteItem = ({
             <AmountCell
               className="text-sm text-right justify-end items-end"
               currencyCode={currencyCode}
-              amount={item.detail.unit_price}
+              amount={item.unit_price}
               originalAmount={isAddedItem ? item.unit_price: originalItem?.unit_price }
             />
           </div>
@@ -151,7 +151,7 @@ export const QuoteItem = ({
           <AmountCell
             className="text-sm text-right justify-end items-end"
             currencyCode={currencyCode}
-            amount={isAddedItem ? item.detail.quantity * item.detail.unit_price: item.total}
+            amount={isAddedItem ? item.detail.quantity * item.unit_price: item.total}
             originalAmount={isAddedItem ? item?.total : originalItem?.total}
           />
         </div>
