@@ -19,7 +19,9 @@ export default async function handleInviteCreated(
   // Keep the container injection signature Medusa v2+ expects
   { data, eventName, container }: { data: InviteCreatedEvent, eventName: string, container: MedusaContainer }
 ) {
-  const logger = container.resolve<Logger>("logger") // Resolve logger correctly
+  const logger = container.resolve<Logger>("logger")
+  logger.info(`Received event: ${eventName} with data: ${JSON.stringify(data)}`); // Log received data
+
   const resend = new Resend(process.env.RESEND_API_KEY)
 
   // Basic check for necessary config
@@ -30,6 +32,12 @@ export default async function handleInviteCreated(
   if (!process.env.RESEND_FROM) {
     logger.error("Resend From address not found in environment variables.")
     return
+  }
+
+  // Add check for data object existence
+  if (!data) {
+    logger.error("Invite created event received with undefined data object.");
+    return;
   }
 
   const inviteId = data.id; // Get ID from event data
