@@ -100,7 +100,12 @@ module.exports = defineConfig({
       },
     },
     [Modules.WORKFLOW_ENGINE]: {
-      resolve: "@medusajs/medusa/workflow-engine-inmemory",
+      resolve: "@medusajs/medusa/workflow-engine-redis",
+      options: {
+        redis: {
+          url: REDIS_URL,
+        },
+      },
     },
   },
 });
