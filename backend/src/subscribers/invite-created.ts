@@ -9,38 +9,26 @@ import {
 import { Resend } from "resend"
 import { Logger } from "@medusajs/framework/types" // Import Logger type
 
-// Remove specific InviteCreatedEvent type for now to inspect raw data
-// type InviteCreatedEvent = {
-//   id: string;
-// }
+// Define the expected structure for the data property
+type InviteCreatedEventData = {
+  id: string;
+}
 
 export default async function handleInviteCreated(
-  // Use generic arguments to capture whatever is passed
-  ...args: any[]
+  // Use the standard Medusa v2+ signature with correct type for data
+  { data, eventName, container }: { data: InviteCreatedEventData, eventName: string, container: MedusaContainer }
 ) {
-  // Resolve container manually if possible (might be within args)
-  // This is a guess, adjust based on logged args structure
-  const container = args.find(arg => arg && typeof arg.resolve === 'function') || args[0]?.container;
+  const logger = container.resolve<Logger>("logger");
+  logger.info(`Handling event: ${eventName} with invite ID: ${data?.id}`); // Log event and ID
 
-  if (!container) {
-    console.error("Could not find container in subscriber arguments.");
-    console.error("Received args:", JSON.stringify(args));
-    return;
+  // Remove the generic args logic and manual container/data finding
+
+  // Access the id directly from the destructured 'data' object
+  const inviteId = data?.id; // Use optional chaining for safety
+  if (!inviteId) {
+      logger.error("Invite created event is missing id in data object.");
+      return;
   }
-
-  // Resolve logger without explicit type argument due to container being 'any'
-  const logger = container.resolve("logger");
-  logger.info(`Invite handler received arguments: ${JSON.stringify(args)}`);
-
-  // Try to find the event data, assuming it might have an 'id'
-  const eventData = args.find(arg => arg && typeof arg.id === 'string');
-
-  if (!eventData || !eventData.id) {
-    logger.error("Could not find event data with 'id' in received arguments.");
-    return;
-  }
-
-  const inviteId = eventData.id;
 
   // Rest of the logic remains the same, using inviteId
   const resend = new Resend(process.env.RESEND_API_KEY)
