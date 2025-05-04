@@ -98,7 +98,7 @@ export default async function handleInviteCreated(
   }
 
   // Construct the invite URL
-  const inviteUrl = `https://admin-staging.flowdose.xyz/invite?token=${inviteToken}`;
+  const inviteUrl = `https://admin-staging.flowdose.xyz/app/invite?token=${inviteToken}`;
 
   logger.info(`Handling invite created/resent for ${userEmail}`);
 
