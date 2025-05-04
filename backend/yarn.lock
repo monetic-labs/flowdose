@@ -2625,7 +2625,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@medusajs/inventory@npm:2.7.1":
+"@medusajs/inventory@npm:2.7.1, @medusajs/inventory@npm:^2.7.1":
   version: 2.7.1
   resolution: "@medusajs/inventory@npm:2.7.1"
   peerDependencies:
@@ -2983,7 +2983,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@medusajs/stock-location@npm:2.7.1":
+"@medusajs/stock-location@npm:2.7.1, @medusajs/stock-location@npm:^2.7.1":
   version: 2.7.1
   resolution: "@medusajs/stock-location@npm:2.7.1"
   peerDependencies:
@@ -12750,8 +12750,10 @@ __metadata:
     "@medusajs/cli": "npm:^2.7.1"
     "@medusajs/event-bus-redis": "npm:^2.7.1"
     "@medusajs/framework": "npm:^2.7.1"
+    "@medusajs/inventory": "npm:^2.7.1"
     "@medusajs/js-sdk": "npm:^2.7.1"
     "@medusajs/medusa": "npm:^2.7.1"
+    "@medusajs/stock-location": "npm:^2.7.1"
     "@medusajs/test-utils": "npm:^2.7.1"
     "@medusajs/ui": "npm:4.0.6"
     "@medusajs/ui-preset": "npm:^2.7.1"

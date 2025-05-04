@@ -9,19 +9,40 @@ import {
 import { Resend } from "resend"
 import { Logger } from "@medusajs/framework/types" // Import Logger type
 
-type InviteCreatedEvent = {
-  id: string; // Event likely only contains the ID
-  // Remove user_email and token
-}
+// Remove specific InviteCreatedEvent type for now to inspect raw data
+// type InviteCreatedEvent = {
+//   id: string;
+// }
 
-// Adjusted function signature based on common Medusa v1 subscriber patterns
 export default async function handleInviteCreated(
-  // Keep the container injection signature Medusa v2+ expects
-  { data, eventName, container }: { data: InviteCreatedEvent, eventName: string, container: MedusaContainer }
+  // Use generic arguments to capture whatever is passed
+  ...args: any[]
 ) {
-  const logger = container.resolve<Logger>("logger")
-  logger.info(`Received event: ${eventName} with data: ${JSON.stringify(data)}`); // Log received data
+  // Resolve container manually if possible (might be within args)
+  // This is a guess, adjust based on logged args structure
+  const container = args.find(arg => arg && typeof arg.resolve === 'function') || args[0]?.container;
 
+  if (!container) {
+    console.error("Could not find container in subscriber arguments.");
+    console.error("Received args:", JSON.stringify(args));
+    return;
+  }
+
+  // Resolve logger without explicit type argument due to container being 'any'
+  const logger = container.resolve("logger");
+  logger.info(`Invite handler received arguments: ${JSON.stringify(args)}`);
+
+  // Try to find the event data, assuming it might have an 'id'
+  const eventData = args.find(arg => arg && typeof arg.id === 'string');
+
+  if (!eventData || !eventData.id) {
+    logger.error("Could not find event data with 'id' in received arguments.");
+    return;
+  }
+
+  const inviteId = eventData.id;
+
+  // Rest of the logic remains the same, using inviteId
   const resend = new Resend(process.env.RESEND_API_KEY)
 
   // Basic check for necessary config
@@ -31,18 +52,6 @@ export default async function handleInviteCreated(
   }
   if (!process.env.RESEND_FROM) {
     logger.error("Resend From address not found in environment variables.")
-    return
-  }
-
-  // Add check for data object existence
-  if (!data) {
-    logger.error("Invite created event received with undefined data object.");
-    return;
-  }
-
-  const inviteId = data.id; // Get ID from event data
-  if (!inviteId) {
-    logger.error("Invite created event is missing id.")
     return
   }
 

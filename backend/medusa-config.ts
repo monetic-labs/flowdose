@@ -107,5 +107,21 @@ module.exports = defineConfig({
         },
       },
     },
+    [Modules.INVENTORY]: {
+      resolve: "@medusajs/inventory",
+      options: {
+        database: {
+          clientUrl: process.env.DATABASE_URL,
+        },
+      },
+    },
+    [Modules.STOCK_LOCATION]: {
+      resolve: "@medusajs/stock-location",
+      options: {
+        database: {
+          clientUrl: process.env.DATABASE_URL,
+        },
+      },
+    },
   },
 });
