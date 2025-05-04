@@ -1,13 +1,11 @@
 import {
   type SubscriberConfig,
-  // type SubscriberArgs, // We might not need this specific type if using the older pattern
-  MedusaContainer, // Import container type directly
-  // Assuming InviteService is available, adjust if named differently
-  // You might need to import the actual type if available, e.g.:
-  // type InviteService = ...
+  MedusaContainer,
 } from "@medusajs/medusa"
+import { ModuleRegistrationName } from "@medusajs/framework/utils"
+import { IUserModuleService } from "@medusajs/types"
 import { Resend } from "resend"
-import { Logger } from "@medusajs/framework/types" // Import Logger type
+import { Logger } from "@medusajs/framework/types"
 
 // Define the expected structure for the data property
 type InviteCreatedEventData = {
@@ -15,19 +13,33 @@ type InviteCreatedEventData = {
 }
 
 export default async function handleInviteCreated(
-  // Use the standard Medusa v2+ signature with correct type for data
-  { data, eventName, container }: { data: InviteCreatedEventData, eventName: string, container: MedusaContainer }
+  // Use generic args based on observed structure: [{ event: {data: {id}}, container }]
+  ...args: any[]
 ) {
-  const logger = container.resolve<Logger>("logger");
-  logger.info(`Handling event: ${eventName} with invite ID: ${data?.id}`); // Log event and ID
+  // Extract container and event data from the first argument
+  const firstArg = args?.[0];
+  const container = firstArg?.container;
+  const eventData = firstArg?.event?.data;
+  const eventName = firstArg?.event?.name;
 
-  // Remove the generic args logic and manual container/data finding
+  if (!container) {
+    console.error("Could not extract container from subscriber arguments.");
+    console.error("Received args:", JSON.stringify(args));
+    return;
+  }
 
-  // Access the id directly from the destructured 'data' object
-  const inviteId = data?.id; // Use optional chaining for safety
+  const logger = container.resolve("logger");
+  logger.info(`Handling event: ${eventName}. Raw args: ${JSON.stringify(args)}`);
+
+  if (!eventData) {
+    logger.error(`Event data is missing in args[0].event.data`);
+    return;
+  }
+
+  const inviteId = eventData.id;
   if (!inviteId) {
-      logger.error("Invite created event is missing id in data object.");
-      return;
+    logger.error("Invite created event data is missing id.");
+    return;
   }
 
   // Rest of the logic remains the same, using inviteId
@@ -43,48 +55,63 @@ export default async function handleInviteCreated(
     return
   }
 
-  // Fetch invite details using InviteService
-  let inviteService: any; // Use 'any' for now, replace with actual type if known
+  // Use User Module instead of inviteService
+  let userModuleService: IUserModuleService; 
   try {
-    // Adjust service name if different (e.g., 'inviteService', 'InviteService')
-    inviteService = container.resolve("inviteService")
+    userModuleService = container.resolve(ModuleRegistrationName.USER);
   } catch (error) {
-    logger.error("Could not resolve inviteService:", error)
+    logger.error("Could not resolve user module service:", error)
     return
   }
 
-  let invite: any; // Use 'any' for now, replace with actual Invite type if known
+  // Get invite from the user module
+  let invite: any;
   try {
-    // Assuming 'retrieve' is the correct method, adjust if needed
-    invite = await inviteService.retrieve(inviteId, {
-      // Specify relations if needed, e.g., relations: ['user']
-    })
+    // The result is an array of invites, not an object with invites property
+    const invites = await userModuleService.listInvites({
+      id: inviteId
+    });
+    
+    if (invites.length === 0) {
+      logger.error(`No invite found with id ${inviteId}`);
+      return;
+    }
+    
+    invite = invites[0];
+    
+    // Log the invite structure to see what fields are actually available
+    logger.info(`Invite structure: ${JSON.stringify(invite)}`);
   } catch (error) {
     logger.error(`Failed to retrieve invite with id ${inviteId}:`, error)
     return
   }
 
-  // Check for required fields from the retrieved invite
-  if (!invite || !invite.user_email || !invite.token) {
-    logger.error(`Retrieved invite data is missing user_email or token for id ${inviteId}.`)
+  // In Medusa 2.x, the field names have likely changed 
+  // Check if we can find the email and token in the structure
+  const userEmail = invite.user_email || invite.email;
+  const inviteToken = invite.token;
+  
+  if (!userEmail || !inviteToken) {
+    logger.error(`Retrieved invite data is missing required fields for id ${inviteId}. 
+      Available fields: ${Object.keys(invite).join(', ')}`);
     return
   }
 
   // Construct the invite URL
-  const inviteUrl = `https://admin-staging.flowdose.xyz/invite?token=${invite.token}`;
+  const inviteUrl = `https://admin-staging.flowdose.xyz/invite?token=${inviteToken}`;
 
-  logger.info(`Handling invite created/resent for ${invite.user_email}`);
+  logger.info(`Handling invite created/resent for ${userEmail}`);
 
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM,
-      to: invite.user_email,
+      to: userEmail,
       subject: "You've been invited to join FlowDose",
       html: `<p>Hello,</p><p>You have been invited to create a user on FlowDose.</p><p>Click the link below to accept the invite and set your password:</p><p><a href="${inviteUrl}">Accept Invite</a></p><p>If you did not expect this invitation, you can ignore this email.</p>`,
     });
-    logger.info(`Invite email sent successfully to ${invite.user_email}`);
+    logger.info(`Invite email sent successfully to ${userEmail}`);
   } catch (error) {
-    logger.error(`Error sending invite email to ${invite.user_email}:`, error)
+    logger.error(`Error sending invite email to ${userEmail}:`, error)
   }
 }
 
